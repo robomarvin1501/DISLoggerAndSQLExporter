@@ -2,6 +2,7 @@ import subprocess
 import os
 import sys
 import json
+from utils.json_decoder import JSON_decoder
 import threading
 import lzma
 
@@ -43,7 +44,7 @@ def process_json(json_dir, json_lock):
             with open(fr"{json_dir}\{json_file}", 'r') as f:
                 try:  # Only completed files
                     current_file_contents = []
-                    for packet in json.load(f):
+                    for packet in JSON_decoder.decode(f.read()):
                         try:  # Only the files WITH DIS data
                             current_file_contents.append(packet["_source"]["layers"]["dis"])
                         except KeyError:
@@ -51,7 +52,9 @@ def process_json(json_dir, json_lock):
                     # Add the file to the cache of filenames, convert to bytes without [],
                     # and add a trailing comma because this is a list of JSON
                     processed_json_cache.add(json_file)
-                    file_as_string = str(current_file_contents)[1:-1] + ','
+                    file_as_string = json.dumps(current_file_contents)[1:-1] + ','
+                    # JSON must have double quotes, this is for ease of reading
+                    file_as_string = file_as_string.replace("'", '"')
                     file_as_bytes = file_as_string.encode("utf-8")
                     with json_lock:  # Lock the objects (race conditions), compress the data, and write it
                         compressed_bytes = lzc.compress(file_as_bytes)
