@@ -36,7 +36,7 @@ def process_json(json_dir, json_lock):
     """
     processed_json_cache = set()
     while True:
-        every_json_file = sorted(os.listdir(json_dir))
+        every_json_file = sorted(os.listdir(json_dir))[:-1]
         unprocessed_json_files = [json_file for json_file in every_json_file if json_file not in processed_json_cache]
 
         for json_file in unprocessed_json_files:
@@ -57,7 +57,7 @@ def process_json(json_dir, json_lock):
                         compressed_bytes = lzc.compress(file_as_bytes)
                         output_file.write(compressed_bytes)
                 except json.JSONDecodeError:
-                    pass
+                    print("JSONDecodeError")
 
 
 logger_processing_dir = r"C:\Users\gidonr\LoggerFiles"

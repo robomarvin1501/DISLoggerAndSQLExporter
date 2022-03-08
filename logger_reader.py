@@ -1,8 +1,12 @@
 import lzma
-import ast
+from utils.json_decoder import JSON_decoder
 
-with lzma.open(r"C:\Users\gidonr\LoggerFiles\compressed_output_lzma", 'r') as f:
+with lzma.open(r"C:\Users\gidonr\LoggerFiles\log_0303_1408.lzma", 'r') as f:
     data = f.read().decode("utf-8")  # change to stream
 
-data = ast.literal_eval(data)  # Data is now a list of dicts of all the data
+data = data[:-2] + ']'  # Removes the trailing comma
+data = data.replace("'", '"')
 
+data = JSON_decoder.decode(data)  # Data is now a list of OrderedDicts of all the data
+
+print(data[0])
