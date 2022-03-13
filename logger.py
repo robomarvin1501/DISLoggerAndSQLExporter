@@ -26,16 +26,18 @@ def convert_to_json(target_input_file, target_output_file, logger_processing_dir
     subprocess.run(convert_to_json_instruction)
 
 
-def process_json(json_dir, json_lock):
+def process_json(json_dir, exercise_id, json_lock):
     """
     This function is called within a separate thread to process any unprocessed, complete json file.
     This is achieved by reading, compressing, and then outputting to the compressed output file.
 
     :param json_dir: str - Complete path to json sub-folder
+    :param exercise_id: integer id, 20 is simulations, etc
     :param json_lock: Lock - The threading Lock object within the program
     :return: None
     """
     processed_json_cache = set()
+    exercise_id = str(exercise_id)  # In the packet it's a str, not int
     while True:
         every_json_file = sorted(os.listdir(json_dir))[:-1]
         unprocessed_json_files = [json_file for json_file in every_json_file if json_file not in processed_json_cache]
@@ -45,20 +47,30 @@ def process_json(json_dir, json_lock):
                 try:  # Only completed files
                     current_file_contents = []
                     for packet in JSON_decoder.decode(f.read()):
-                        try:  # Only the files WITH DIS data
-                            current_file_contents.append(packet["_source"]["layers"]["dis"])
+                        try:  # Only the files WITH DIS data, and that is of the correct ExerciseId
+                            if packet["_source"]["layers"]["dis"]["Header"]["dis.exer_id"] == exercise_id:
+                                current_packet = {}
+                                current_packet.update(packet["_source"]["layers"]["dis"])
+                                current_packet.update({
+                                    "frame": {
+                                        "WorldTime": packet["_source"]["layers"]["frame"]["frame.time_epoch"],
+                                        "PacketTime": packet["_source"]["layers"]["frame"]["frame.time_relative"]
+                                    }
+                                })
+                                current_file_contents.append(current_packet)
                         except KeyError:
                             pass
                     # Add the file to the cache of filenames, convert to bytes without [],
                     # and add a trailing comma because this is a list of JSON
                     processed_json_cache.add(json_file)
-                    file_as_string = json.dumps(current_file_contents)[1:-1] + ','
-                    # JSON must have double quotes, this is for ease of reading
-                    file_as_string = file_as_string.replace("'", '"')
-                    file_as_bytes = file_as_string.encode("utf-8")
-                    with json_lock:  # Lock the objects (race conditions), compress the data, and write it
-                        compressed_bytes = lzc.compress(file_as_bytes)
-                        output_file.write(compressed_bytes)
+                    if len(current_file_contents) > 0:
+                        file_as_string = json.dumps(current_file_contents)[1:-1] + ','
+                        # JSON must have double quotes, this is for ease of reading
+                        # file_as_string = file_as_string.replace("'", '"')
+                        file_as_bytes = file_as_string.encode("utf-8")
+                        with json_lock:  # Lock the objects (race conditions), compress the data, and write it
+                            compressed_bytes = lzc.compress(file_as_bytes)
+                            output_file.write(compressed_bytes)
                 except json.JSONDecodeError:
                     print("JSONDecodeError")
 
@@ -82,12 +94,14 @@ subprocess.run(["powershell", "Start-Process", "-FilePath", r"'C:\Program Files\
 
 json_lock = threading.Lock()
 lzc = lzma.LZMACompressor()
-output_filename = "log_0303_1408.lzma"
+exercise_id = 97
+output_filename = "integration_2402.lzma"
 with open(fr"{logger_processing_dir}\{output_filename}", 'wb') as output_file:
     output_file.write(lzc.compress(b'['))  # Write the opening of the JSON list
 
     # Start processing any JSON output files
-    threading.Thread(target=process_json, args=(fr"{logger_processing_dir}\jsons", json_lock), daemon=True).start()
+    threading.Thread(target=process_json, args=(fr"{logger_processing_dir}\jsons", exercise_id, json_lock),
+                     daemon=True).start()
 
     """
     This processes every pcapng file, aside from the last one, since that one is probably incomplete at the time 
