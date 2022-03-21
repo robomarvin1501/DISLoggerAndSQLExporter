@@ -115,42 +115,56 @@ def export_json(json_to_export, event_reports_config, logger_file_name, conn, me
                 table_columns = event_reports["numbers"][f"{current_event_report}"]
                 event_report_data = packet["Event Report PDU"]
 
-                event_report_fields = sorted([packet_field_name for packet_field_name in event_report_data if
-                                              "Fixed" in packet_field_name or "Variable" in packet_field_name])
+                event_report_fields = [packet_field_name for packet_field_name in event_report_data if
+                                       "Fixed" in packet_field_name or "Variable" in packet_field_name]
 
                 data_to_insert = {}
                 for i, column in enumerate(table_columns):
                     if column[0] not in universal_fields:
                         # Add the fields that are local to this event report to the dict
-                        if "Fixed" in event_report_fields[i]:
-                            data_as_hex_bytes = event_report_data[event_report_fields[i]][
-                                "dis.fixed_datum_value"].replace(
-                                ':', '')
-                        elif "Variable" in event_report_fields[i]:
-                            data_as_hex_bytes = event_report_data[event_report_fields[i]][
-                                "dis.variable_datum_value"].replace(":", "")
-                        else:
-                            raise Exception(f"Event report field {event_report_fields[i]} does not match approved design!")
-                        data_you_want = translate_data_from_hex_bytes(data_as_hex_bytes, column[1])
-                        data_to_insert[column[0]] = data_you_want
+                        try:
+                            if "Fixed" in event_report_fields[i]:
+                                data_as_hex_bytes = event_report_data[event_report_fields[i]][
+                                    "dis.fixed_datum_value"].replace(
+                                    ':', '')
+                            elif "Variable" in event_report_fields[i]:
+                                data_as_hex_bytes = event_report_data[event_report_fields[i]][
+                                    "dis.variable_datum_value"].replace(":", "")
+                            else:
+                                raise Exception(
+                                    f"Event report field {event_report_fields[i]} does not match approved design!")
+                            data_you_want = translate_data_from_hex_bytes(data_as_hex_bytes, column[1])
+                            data_to_insert[column[0]] = data_you_want
+                        except (IndexError, UnicodeDecodeError) as e:
+                            print(e)
+                            print("Event report fields: ", event_report_fields)
+                            print("table columns: ", table_columns)
+                            print(i, column)
+                            # sys.exit()
                     else:
                         # Add the universal fields (SenderId, WorldTime, PacketTime, etc)
-                        data_to_insert["SenderIdSite"] = event_report_data["Originating Entity ID"]["dis.entity_id_site"]
-                        data_to_insert["SenderIdHost"] = event_report_data["Originating Entity ID"]["dis.entity_id_application"]
-                        data_to_insert["SenderIdNum"] = event_report_data["Originating Entity ID"]["dis.entity_id_entity"]
+                        data_to_insert["SenderIdSite"] = event_report_data["Originating Entity ID"][
+                            "dis.entity_id_site"]
+                        data_to_insert["SenderIdHost"] = event_report_data["Originating Entity ID"][
+                            "dis.entity_id_application"]
+                        data_to_insert["SenderIdNum"] = event_report_data["Originating Entity ID"][
+                            "dis.entity_id_entity"]
 
-                        data_to_insert["ReceiverIdSite"] = event_report_data["Receiving Entity ID"]["dis.entity_id_entity"]
-                        data_to_insert["ReceiverIdHost"] = event_report_data["Receiving Entity ID"]["dis.entity_id_application"]
-                        data_to_insert["ReceiverIdNum"] = event_report_data["Receiving Entity ID"]["dis.entity_id_entity"]
+                        data_to_insert["ReceiverIdSite"] = event_report_data["Receiving Entity ID"][
+                            "dis.entity_id_entity"]
+                        data_to_insert["ReceiverIdHost"] = event_report_data["Receiving Entity ID"][
+                            "dis.entity_id_application"]
+                        data_to_insert["ReceiverIdNum"] = event_report_data["Receiving Entity ID"][
+                            "dis.entity_id_entity"]
 
                         data_to_insert["ExerciseId"] = packet["Header"]["dis.exer_id"]
                         data_to_insert["ExportTime"] = export_time
 
-                        data_to_insert["WorldTime"] = datetime.datetime.fromtimestamp(float(packet["frame"]["WorldTime"]))
+                        data_to_insert["WorldTime"] = datetime.datetime.fromtimestamp(
+                            float(packet["frame"]["WorldTime"]))
                         data_to_insert["PacketTime"] = packet["frame"]["PacketTime"]
 
                         data_to_insert["LoggerFile"] = logger_file_name
-
 
                 sql_table = sqlalchemy.Table(table_title, meta, autoload_with=conn.engine)
 
@@ -159,7 +173,9 @@ def export_json(json_to_export, event_reports_config, logger_file_name, conn, me
 
         elif "Entity State PDU" in packet.keys():
             pass
-        elif list(packet.keys())[1] in ["Transmitter PDU", "Receiver PDU", "Data PDU", "Aggregate State PDU", "Signal PDU", 'Environmental Process PDU', 'Comment PDU', 'Detonation PDU', 'Fire PDU']:
+        elif list(packet.keys())[1] in ["Transmitter PDU", "Receiver PDU", "Data PDU", "Aggregate State PDU",
+                                        "Signal PDU", 'Environmental Process PDU', 'Comment PDU', 'Detonation PDU',
+                                        'Fire PDU']:
             pass
         else:
             print(f"Something weird here: {packet.keys()}")
@@ -170,10 +186,11 @@ create_tables("GidonLSETest", r"\\files\ExpData\Merkava4Barak2022\LoggerSQLExpor
 meta = sqlalchemy.MetaData(schema="dis")
 conn = sqlConn("GidonLSETest")
 
-with lzma.open("C:/Users/gidonr/Desktop/integration_2402.lzma", 'r') as f:
+with lzma.open("C:/Users/gidonr/Desktop/integration_1003_2.lzma", 'r') as f:
     data = f.read().decode("utf-8")[:-2] + ']'
     print("Loaded file")
 
 json_data = json.loads(data)
 print("Loaded JSON")
-export_json(json_data, r"\\files\ExpData\Merkava4Barak2022\LoggerSQLExporter\BLPduEncoder.xml", "integration_2402.lgr", conn, meta)
+export_json(json_data, r"\\files\ExpData\Merkava4Barak2022\LoggerSQLExporter\BLPduEncoder.xml",
+            "integration_1003_2.lgr", conn, meta)
