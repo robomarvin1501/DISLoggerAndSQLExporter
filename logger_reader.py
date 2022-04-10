@@ -1,11 +1,15 @@
 import lzma
-import json
 
-with lzma.open(r"C:\Users\gidonr\LoggerFiles\log_0303_1408.lzma", 'r') as f:
-    data = f.read().decode("utf-8")  # change to stream
+from opendis.PduFactory import createPdu
 
-data = data[:-2] + ']'  # Removes the trailing comma
+with lzma.open("logs/data_out.lzma", 'rb') as f:
+    byte_data = f.read().split(b', ')
 
-data = json.loads(data)  # Data is now a list of OrderedDicts of all the data
+pdus = []
 
-print(data[0])
+for pdu_bytes in byte_data:
+    if pdu_bytes != b'':
+        pdu = createPdu(pdu_bytes)
+        pdus.append(pdu)
+
+print(f"Ended. {len(pdus)} PDUs in loggerfile")
