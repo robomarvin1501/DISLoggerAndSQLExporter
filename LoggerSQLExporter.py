@@ -172,7 +172,70 @@ def export_json(json_to_export, event_reports_config, logger_file_name, conn, me
                 conn.execute(ins)
 
         elif "Entity State PDU" in packet.keys():
-            pass
+            current_entity_state = packet["Entity State PDU"]
+
+            entity_ints = sqlalchemy.Table("EntityStateInts", meta, autoload_with=conn.engine)
+            entity_locs = sqlalchemy.Table("EntityStateLocations", meta, autoload_with=conn.engine)
+            entty_texts = sqlalchemy.Table("EntityStateTexts", meta, autoload_with=conn.engine)
+
+            # Unique fields
+            entity_ints_data = {}
+            entity_locs_data = {}
+            entity_texts_data = {}
+
+            # entity_ints_data[]
+
+            # Universal fields
+
+
+            """
+            EntityStateInts
+                IntType (forceId, LifeformState, etc): ArrayByte
+                IntValue: int
+                
+                SenderIdSite: int
+                SenderIdHost: int
+                SenderIdNum: int
+                WorldTime: DateTime
+                PacketTime: float
+                LoggerFile: ArrayByte
+                ExportTime: DateTime not null
+                ExerciseId: int
+            
+            EntityStateLocations
+                GeoLocationX: float
+                GeoLocationY: float
+                GeoLocationZ: float
+                GeoVelocityX: float
+                GeoVelocityY: float
+                GeoVelocityZ: float
+                Psi: float
+                Theta: float
+                Phi: float
+                
+                SenderIdSite: int
+                SenderIdHost: int
+                SenderIdNum: int
+                WorldTime: DateTime
+                PacketTime: float
+                LoggerFile: ArrayByte
+                ExportTime: DateTime not null
+                ExerciseId: int
+                
+            EntityStateTexts
+                TextType: ArrayByte
+                TextValue: ArrayByte
+                
+                SenderIdSite: int
+                SenderIdHost: int
+                SenderIdNum: int
+                WorldTime: DateTime
+                PacketTime: float
+                LoggerFile: ArrayByte
+                ExportTime: DateTime not null
+                ExerciseId: int
+            
+            """
         elif list(packet.keys())[1] in ["Transmitter PDU", "Receiver PDU", "Data PDU", "Aggregate State PDU",
                                         "Signal PDU", 'Environmental Process PDU', 'Comment PDU', 'Detonation PDU',
                                         'Fire PDU']:
