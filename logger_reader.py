@@ -1,7 +1,11 @@
 import lzma
-import xml.etree.ElementTree as ET
+import json
 
-with lzma.open(r"C:\Users\gidonr\LoggerFiles\compressed_output_lzma", 'r') as f:
+with lzma.open(r"C:\Users\gidonr\LoggerFiles\log_0303_1408.lzma", 'r') as f:
     data = f.read().decode("utf-8")  # change to stream
 
-data = ET.ElementTree(ET.fromstring(data))
+data = data[:-2] + ']'  # Removes the trailing comma
+
+data = json.loads(data)  # Data is now a list of OrderedDicts of all the data
+
+print(data[0])
