@@ -5,8 +5,11 @@ from opendis.PduFactory import createPdu
 from opendis.DataOutputStream import DataOutputStream
 from io import BytesIO
 
+# EXERCISE_ID = 97
+# UDP_PORT = 3000
 EXERCISE_ID = 20
 UDP_PORT = 3000
+FILENAME = "test.lzma"
 
 print("Created UDP socket {}".format(UDP_PORT))
 
@@ -51,11 +54,9 @@ def write_data(output_filename, logger_processing_dir, lzma_compressor, pdu_data
 
 lzc = lzma.LZMACompressor()
 try:
-    for _ in range(100):
-        write_data("data_out.lzma", "logs", lzc, receive_pdu(UDP_PORT, EXERCISE_ID))
+    while True:
+        write_data(FILENAME, "logs", lzc, receive_pdu(UDP_PORT, EXERCISE_ID))
 
-    with open("logs/data_out.lzma", 'ab') as output_file:
-        output_file.write(lzc.flush())
 except KeyboardInterrupt:
-    with open("logs/data_out.lzma", 'ab') as output_file:
+    with open(f"logs/{FILENAME}", 'ab') as output_file:
         output_file.write(lzc.flush())
