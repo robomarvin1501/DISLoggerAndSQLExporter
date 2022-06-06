@@ -2557,21 +2557,21 @@ class IntercomCommunicationsParameters(object):
 class EntityType(object):
     """Identifies the type of Entity"""
 
-    def __init__(self):
+    def __init__(self, entityKind=0, domain=0, country=0, category=0, subcategory=0, specific=0, extra=0):
         """ Initializer for EntityType"""
-        self.entityKind = 0
+        self.entityKind = entityKind
         """ Kind of entity"""
-        self.domain = 0
+        self.domain = domain
         """ Domain of entity (air, surface, subsurface, space, etc)"""
-        self.country = 0
+        self.country = country
         """ country to which the design of the entity is attributed"""
-        self.category = 0
+        self.category = category
         """ category of entity"""
-        self.subcategory = 0
+        self.subcategory = subcategory
         """ subcategory of entity"""
-        self.specific = 0
+        self.specific = specific
         """ specific info based on subcategory field. Renamed from specific because that is a reserved word in SQL."""
-        self.extra = 0
+        self.extra = extra
 
     def serialize(self, output_stream):
         """serialize the class """
