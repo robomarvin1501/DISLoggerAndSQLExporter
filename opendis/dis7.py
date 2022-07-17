@@ -3079,6 +3079,9 @@ class EntityID(object):
         self.entityID = 0
         """ Entity number ID"""
 
+    def __str__(self):
+        return f"Site: {self.siteID} Host: {self.applicationID} Entity: {self.entityID}"
+
     def serialize(self, output_stream):
         """serialize the class """
         output_stream.write_unsigned_short(self.siteID)

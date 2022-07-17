@@ -1,15 +1,21 @@
 import lzma
 import socket
+import struct
 
 from opendis.PduFactory import createPdu
 from opendis.DataOutputStream import DataOutputStream
 from io import BytesIO
 
+import logging
+
+logging.basicConfig(filename="logger_recorder.log", encoding="utf-8", level=logging.DEBUG)
+
+
 # EXERCISE_ID = 97
 # UDP_PORT = 3000
-EXERCISE_ID = 20
+EXERCISE_ID = 97
 UDP_PORT = 3000
-FILENAME = "test.lzma"
+FILENAME = "integration_0704_1.lzma"
 
 print("Created UDP socket {}".format(UDP_PORT))
 
@@ -26,9 +32,17 @@ def receive_pdu(udp_port, exercise_id):
     udpSocket.bind(("", udp_port))
     udpSocket.settimeout(3)  # exit if we get nothing in this many seconds
 
-    data = udpSocket.recv(4096)
+    try:
+        data = udpSocket.recv(4096)
+    except OSError as e:
+        logging.warning(f"Problem receiving the data: {e}")
+        return b""
 
-    current_pdu = createPdu(data)
+    try:
+        current_pdu = createPdu(data)
+    except struct.error:
+        logging.warning("Failed to create pdu")
+        return b""
     pdu_byte_data = b""
 
     if current_pdu is not None:
@@ -48,6 +62,8 @@ def write_data(output_filename, logger_processing_dir, lzma_compressor, pdu_data
     :param pdu_data: bytes
     :return: None
     """
+    if pdu_data == b"":
+        return
     with open(f"{logger_processing_dir}/{output_filename}", 'ab') as output_file:
         output_file.write(lzma_compressor.compress(pdu_data + b", "))
 

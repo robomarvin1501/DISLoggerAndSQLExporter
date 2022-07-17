@@ -6,7 +6,6 @@ import time
 
 from io import BytesIO
 
-from opendis.DataInputStream import DataInputStream
 from opendis.DataOutputStream import DataOutputStream
 from opendis.dis7 import EntityStatePdu, EntityType
 from opendis.RangeCoordinates import GPS
