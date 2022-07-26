@@ -87,6 +87,9 @@ def createPdu(data):
     memoryStream = BytesIO(data)
     inputStream = DataInputStream(memoryStream)
 
+    if data == b"":
+        return None
+
     return getPdu(inputStream)
 
 
