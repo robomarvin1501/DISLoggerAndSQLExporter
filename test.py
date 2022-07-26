@@ -3,9 +3,6 @@ import socket
 import struct
 import sys
 import datetime
-import threading
-
-from queue import SimpleQueue
 
 from opendis.PduFactory import createPdu
 
@@ -91,7 +88,7 @@ class DataWriter:
     #     self.output_file.close()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        print("Writer closed")
+        print(f"Writer closed {exc_type} : {exc_val} : {exc_tb}")
         self.output_file.write(self.lzc.flush())
         self.output_file.close()
 
@@ -100,34 +97,20 @@ class DataWriter:
 
         bytes_packettime = struct.pack("d", packettime)
         bytes_worldtime = struct.pack("d", worldtime)
-        self.output_file.write(self.lzc.compress(pdu_data + b", ") + bytes_packettime + b", " + bytes_worldtime + b"\n")
-
-
-def receiver(lzc, exercise_id, msg_queue: SimpleQueue):
-    with DataWriter("test.lzma", "logs", lzc) as writer:
-        with DISReceiver(3000, exercise_id, msg_len=16_384) as r:
-            for (address, data, packettime, world_timestamp) in r:
-                # print(f"Got packet from {address}: {data}")
-                # Do stuff with data
-                # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
-                writer.write(data, packettime, world_timestamp)
-                if msg_queue.qsize() > 0:
-                    breakpoint()
-                    return
+        self.output_file.write(self.lzc.compress(pdu_data + b", " + bytes_packettime + b", " + bytes_worldtime + b"\n"))
 
 
 lzc = lzma.LZMACompressor()
-# writer = DataWriter("test.lzma", "logs", lzc)
-msg_queue = SimpleQueue()
 
 EXERCISE_ID = 97
 
-receiver_thread = threading.Thread(target=receiver, args=(lzc, EXERCISE_ID, msg_queue))
-receiver_thread.start()
-# receiver(lzc, EXERCISE_ID, msg_queue)
-command = input("Stop the program (y/n): ")
-if command == "y":
-    msg_queue.put("y")
+with DataWriter("test.lzma", "logs", lzc) as writer:
+    with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+        for (address, data, packettime, world_timestamp) in r:
+            # print(f"Got packet from {address}: {data}")
+            # Do stuff with data
+            # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
+            writer.write(data, packettime, world_timestamp)
 
 # receiver_thread.join()
 print("Program ended")
