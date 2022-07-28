@@ -1,78 +1,118 @@
 import lzma
 import socket
 import struct
+import sys
+import datetime
 
 from opendis.PduFactory import createPdu
-from opendis.DataOutputStream import DataOutputStream
-from io import BytesIO
-
-import logging
-
-logging.basicConfig(filename="logger_recorder.log", encoding="utf-8", level=logging.DEBUG)
 
 
-# EXERCISE_ID = 97
-# UDP_PORT = 3000
-EXERCISE_ID = 97
-UDP_PORT = 3000
-FILENAME = "integration_0704_1.lzma"
+class DISReceiver:
+    def __init__(self, port: int, exercise_id: int, msg_len: int = 8192, timeout: int = 15):
+        """
 
-print("Created UDP socket {}".format(UDP_PORT))
+        :param port: int : port on which dis is transmitted (usually 3000)
+        :param exercise_id: int : The exercise id (experiments are usually 20, check wiki for further details)
+        :param msg_len: int : The length of the message
+        :param timeout: int : Amount of time to wait before giving up
+        """
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.settimeout(timeout)
+        self.sock.bind(("", port))
+
+        self.msg_len = msg_len
+
+        self.exercise_id = exercise_id
+
+        self.starting_timestamp = datetime.datetime.now().timestamp()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            received_exercise_id = -1
+            data, addr = "", ""
+            world_timestamp = 0
+            while received_exercise_id != self.exercise_id:
+                try:
+                    data, addr = self.sock.recvfrom(self.msg_len)
+                    world_timestamp = datetime.datetime.now().timestamp()
+                except WindowsError as e:
+                    print(f"Windows error, socket size? {e}")
+                    sys.exit()
+                try:
+                    received_pdu = createPdu(data)
+                except struct.error as e:
+                    print(f"Struct exception (shibolet): {e}")
+                    sys.exit()
+
+                if received_pdu is not None:
+                    received_exercise_id = received_pdu.exerciseID
+
+            packettime = world_timestamp - self.starting_timestamp
+            assert packettime > 0
+            return addr, data, packettime, world_timestamp
+        except Exception as e:
+            print(f"Got exception trying to receive {e}")
+            raise StopIteration
+
+    def __del__(self):
+        print("Socket deleted")
+        self.sock.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        print("Socket exited")
+        self.sock.close()
 
 
-def receive_pdu(udp_port, exercise_id):
-    """
+class DataWriter:
+    def __init__(self, output_file_name, logger_dir, lzma_compressor):
+        self.output_file_name = output_file_name
+        self.logger_dir = logger_dir
+        self.lzc = lzma_compressor
 
-    :param udp_port: int : port on which dis is transmitted
-    :param exercise_id: int
-    :return: bytes
-    """
-    udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    udpSocket.bind(("", udp_port))
-    udpSocket.settimeout(3)  # exit if we get nothing in this many seconds
+        self.output_file = None
 
-    try:
-        data = udpSocket.recv(4096)
-    except OSError as e:
-        logging.warning(f"Problem receiving the data: {e}")
-        return b""
+    def __enter__(self):
+        self.output_file = open(f"{self.logger_dir}/{self.output_file_name}", 'ab')
+        return self
 
-    try:
-        current_pdu = createPdu(data)
-    except struct.error:
-        logging.warning("Failed to create pdu")
-        return b""
-    pdu_byte_data = b""
+    # def __del__(self):
+    #     print("Writer deleted")
+    #     self.output_file.write(self.lzc.flush())
+    #     self.output_file.close()
 
-    if current_pdu is not None:
-        if current_pdu.exerciseID == exercise_id:
-            memory_stream = BytesIO()
-            output_stream = DataOutputStream(memory_stream)
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        print(f"Writer closed {exc_type} : {exc_val} : {exc_tb}")
+        self.output_file.write(self.lzc.flush())
+        self.output_file.close()
 
-            current_pdu.serialize(output_stream)
-            pdu_byte_data = memory_stream.getvalue()
-
-    return pdu_byte_data
-
-
-def write_data(output_filename, logger_processing_dir, lzma_compressor, pdu_data):
-    """
-    :param output_filename: str
-    :param pdu_data: bytes
-    :return: None
-    """
-    if pdu_data == b"":
-        return
-    with open(f"{logger_processing_dir}/{output_filename}", 'ab') as output_file:
-        output_file.write(lzma_compressor.compress(pdu_data + b", "))
+    def write(self, pdu_data, packettime: float, worldtime: float):
+        bytes_packettime = struct.pack("d", packettime)
+        bytes_worldtime = struct.pack("d", worldtime)
+        self.output_file.write(
+            self.lzc.compress(
+                pdu_data + b"line_divider" + bytes_packettime + b"line_divider" + bytes_worldtime + b"line_separator"
+            )
+        )
 
 
 lzc = lzma.LZMACompressor()
-try:
-    while True:
-        write_data(FILENAME, "logs", lzc, receive_pdu(UDP_PORT, EXERCISE_ID))
 
-except KeyboardInterrupt:
-    with open(f"logs/{FILENAME}", 'ab') as output_file:
-        output_file.write(lzc.flush())
+EXERCISE_ID = 20
+
+with DataWriter("test.lzma", "logs", lzc) as writer:
+    with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+        for (address, data, packettime, world_timestamp) in r:
+            # print(f"Got packet from {address}: {data}")
+            # Do stuff with data
+            # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
+            writer.write(data, packettime, world_timestamp)
+
+# receiver_thread.join()
+print("Program ended")
