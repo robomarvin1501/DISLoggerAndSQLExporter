@@ -93,16 +93,18 @@ class DataWriter:
         self.output_file.close()
 
     def write(self, pdu_data, packettime: float, worldtime: float):
-        # self.output_file.write(self.lzc.compress(pdu_data + b", "))
-
         bytes_packettime = struct.pack("d", packettime)
         bytes_worldtime = struct.pack("d", worldtime)
-        self.output_file.write(self.lzc.compress(pdu_data + b", " + bytes_packettime + b", " + bytes_worldtime + b"\n"))
+        self.output_file.write(
+            self.lzc.compress(
+                pdu_data + b"line_divider" + bytes_packettime + b"line_divider" + bytes_worldtime + b"line_separator"
+            )
+        )
 
 
 lzc = lzma.LZMACompressor()
 
-EXERCISE_ID = 97
+EXERCISE_ID = 20
 
 with DataWriter("test.lzma", "logs", lzc) as writer:
     with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
