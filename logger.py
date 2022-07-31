@@ -10,7 +10,6 @@ from opendis.PduFactory import createPdu
 class DISReceiver:
     def __init__(self, port: int, exercise_id: int, msg_len: int = 8192, timeout: int = 15):
         """
-
         :param port: int : port on which dis is transmitted (usually 3000)
         :param exercise_id: int : The exercise id (experiments are usually 20, check wiki for further details)
         :param msg_len: int : The length of the message
@@ -76,6 +75,9 @@ class DataWriter:
         self.logger_dir = logger_dir
         self.lzc = lzma_compressor
 
+        self.line_divider = b"line_divider"
+        self.line_separator = b"line_separator"
+
         self.output_file = None
 
     def __enter__(self):
@@ -97,19 +99,20 @@ class DataWriter:
         bytes_worldtime = struct.pack("d", worldtime)
         self.output_file.write(
             self.lzc.compress(
-                pdu_data + b"line_divider" + bytes_packettime + b"line_divider" + bytes_worldtime + b"line_separator"
+                pdu_data + self.line_divider + bytes_packettime + self.line_divider + bytes_worldtime
+                + self.line_separator
             )
         )
 
 
 lzc = lzma.LZMACompressor()
 
-EXERCISE_ID = 20
+EXERCISE_ID = 97
 
-with DataWriter("test.lzma", "logs", lzc) as writer:
+with DataWriter("exp_0_1807_3.lzma", "logs", lzc) as writer:
     with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
         for (address, data, packettime, world_timestamp) in r:
-            # print(f"Got packet from {address}: {data}")
+            print(f"Got packet from {address}: {data}")
             # Do stuff with data
             # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
             writer.write(data, packettime, world_timestamp)
