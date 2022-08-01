@@ -73,3 +73,102 @@ EntityState
   - ''.join(map(chr, pdu.marking.characters))
   - entityType (or alternativeEntityType) in the following order
     - entityKind:domain:country:category:subcategory:specific:extra
+
+
+FirePDU
+==========
+- EventId 
+  - site=eventID.simulationAddress.site
+  - host=eventID.simulationAddress.application
+  - num=eventID.eventNumber
+- AttackerId
+  - firingEntityId (site=site, host=application, num=entity)
+- TargetId
+  - targetEntityId (site=site, host=application, num=entity)
+- MunitionId
+  - munitionExpendibleID (site=site, host=application, num=entity)
+- GeoLocation
+  - locationInWoirldCoordinates (x, y, z)
+- GeoVelocity
+  - velocity (x, y, z)
+- MunitionType
+  - descriptor.munitionType (entityKind:domain:country:category:subcategory:specific:extra)
+- FuseType
+  - descriptor.fuse
+- Quantity
+  - descriptor.quantity
+- Range
+  - range
+- WarheadType
+  - descriptor.warhead
+- WorldTime
+- PacketTime
+- LoggerFile
+- ExportTime
+- ExerciseId
+
+
+
+DetonationPDU
+===============
+- EventId
+  - site=eventID.simulationAddress.site
+  - host=eventID.simulationAddress.application
+  - num=eventID.eventNumber
+- AttackerId
+  - firingEntityID (site=site, host=application, num=entity)
+- TargetId
+  - targetEntityID (site=site, host=applications, num=entity)
+- MunitionId
+  - explodingEntityID (site=site, host=applications, num=entity)
+- GeoLocation
+  - locationInWorldCoordinates
+- GeoVelocity
+  - velocity
+- MunitionType
+  - descriptor.munitionType (entityKind:domain:country:category:subcategory:specific:extra)
+- FuseType
+  - descriptor.fuse
+- Quantity
+  - descriptor.quantity
+- WarheadType
+  - descriptor.warhead
+- WorldTime
+- PacketTime
+- LoggerFile
+- ExportTime
+- ExerciseId
+
+
+
+
+
+TransmitterPDU
+========
+- SenderId
+  - entityID (site=site, host=application, entity=entity)
+- RadioID
+  - radioNumber
+- RadioType
+  - radioEntityType (entityKind:domain:country:category:subcategory:specific:extra)
+- TransmitState
+  - transmitState
+- InputSource
+  - inputSource
+- AntennaLocation
+  - antennaLocation
+- RelativeAntennaLocation
+  - relativeAntennaLocation
+- AntennaPatternType
+  - antennaPatternType
+- Frequency
+  - frequency
+- TransmitFrequencyBandwidth
+  - transmitFrequencyBandwidth
+- Power
+  - power
+- WorldTime
+- PacketTime
+- LoggerFile
+- ExportTime
+- ExerciseId
