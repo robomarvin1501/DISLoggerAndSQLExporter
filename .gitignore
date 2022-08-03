@@ -3,3 +3,5 @@
 __pycache__/
 /logs/
 /mak_logs/
+/encoders/
+/***REMOVED***/config.py
