@@ -1,21 +1,20 @@
+import datetime
 import lzma
 
 import json
+import os
 import struct
 import logging
 
 import opendis
 
-import sqlalchemy
+import pandas as pd
+
 from ***REMOVED***.Tools import sqlConn
 
 from opendis.PduFactory import createPdu
-from utils.sql_table_creation import create_tables
-
-conn = sqlConn("GidonLSETest")
-meta = sqlalchemy.MetaData(schema="dis")
-
-# create_tables(conn, r"\\files\ExpData\TomorrowsEdge2022A\LoggerSQLExporter\BLPduEncoder.xml")
+***REMOVED***
+from ***REMOVED***.create_sql import create_tables
 
 logging.basicConfig(filename="logger_exporter.log", encoding="utf-8", level=logging.DEBUG)
 
@@ -91,57 +90,175 @@ class LoggerPDU:
         self.world_time = struct.unpack("d", split_line[2])[0]
 
 
-errors = 0
-separator_errors = 0
-struct_unpack_errors = 0
-pdu_unpack_error = 0
+class EventReportInterpreter:
+    def __init__(self, pdu: LoggerPDU, pdu_encoder: dict):
+        self.logger_pdu = pdu
+        self.event_num = self.logger_pdu.pdu.eventType
+        self.event_name = pdu_encoder[str(self.event_num)]["event_name"]
 
-with lzma.open("logs/test.lzma", 'r') as f:
-    # data = f.read().decode("utf-8")[:-2] + ']'
-    # data = f.read().split(b', ')
-    raw_data = f.read().split(b"line_separator")
+        self.pdu_encoder = pdu_encoder
 
-    data = []
+        self.variable_data = {}
+        self.fixed_data = {}
+        self.base_data = {}
 
-    total = len(raw_data)
-    print(f"Total packets: {len(raw_data):,}")
-    for i, line in enumerate(raw_data):
-        if i % 100_000 == 0:
-            print(f"{i:,}")
-        if line.count(b"line_divider") == 2:
-            try:
-                data.append(LoggerPDU(line))
-            except ValueError:
-                # print(f"ValueError: {i}")
-                errors += 1
-                separator_errors += 1
-            except BytesWarning:
-                errors += 1
-                pdu_unpack_error += 1
-            except struct.error:
-                # print(f"Struct error: {i}")
-                errors += 1
-                struct_unpack_errors += 1
+        self.interpret_pdu()
+
+    def __str__(self):
+        return f"{self.variable_data}\n{self.fixed_data}"
+
+    def interpret_pdu(self):
+        for var_data, data_name in zip(self.logger_pdu.pdu.variableDatums,
+                                       self.pdu_encoder[str(self.event_num)]["VariableData"].keys()):
+            # self.variable_data.append((data_name, [''.join(map(chr, var_data.variableData))]))
+            self.variable_data[data_name] = [''.join(map(chr, var_data.variableData))]
+
+        for fixed_data, data_name, data_type in zip(self.logger_pdu.pdu.fixedDatums,
+                                                    self.pdu_encoder[str(self.event_num)]["FixedData"].keys(),
+                                                    self.pdu_encoder[str(self.event_num)]["FixedData"].values()):
+            if data_type == "Float64":
+                datum_as_hex = hex(fixed_data.fixedDatumValue)[2:]
+                if datum_as_hex == '0':
+                    datum_as_hex = "00000000"
+                datum_as_bytes = bytes.fromhex(datum_as_hex)
+                datum_as_float = struct.unpack("!f", datum_as_bytes)[0]
+
+                # self.fixed_data.append((data_name, [datum_as_float]))
+                self.fixed_data[data_name] = [datum_as_float]
+
+            elif data_type == "Int32":
+                # self.fixed_data.append((data_name, [fixed_data.fixedDatumValue]))
+                self.fixed_data[data_name] = [fixed_data.fixedDatumValue]
+
+        self._get_base_data()
+
+    def _get_base_data(self):
+        self.base_data["SenderIdSite"] = self.logger_pdu.pdu.originatingEntityID.siteID
+        self.base_data["SenderIdHost"] = self.logger_pdu.pdu.originatingEntityID.applicationID
+        self.base_data["SenderIdNum"] = self.logger_pdu.pdu.originatingEntityID.entityID
+
+        self.base_data["ReceiverIdSite"] = self.logger_pdu.pdu.receivingEntityID.siteID
+        self.base_data["ReceiverIdHost"] = self.logger_pdu.pdu.receivingEntityID.applicationID
+        self.base_data["ReceiverIdNum"] = self.logger_pdu.pdu.receivingEntityID.entityID
+
+        self.base_data["WorldTime"] = datetime.datetime.fromtimestamp(self.logger_pdu.world_time)
+        self.base_data["PacketTime"] = self.logger_pdu.packet_time
+        # Loggerfile, Export time, and exercise id are dealt by the LSE
+
+
+class LoggerSQLExporter:
+    """
+    Exporter:
+        A class with a buffer of data to export, which it does every time the buffer fills (say, 400 pieces?)
+        Stores some things persistently, (eg SenderId -> MarkingText)
+
+    """
+
+    def __init__(self, logger_file: str, export_db: str, exercise_id: int, new_db: bool = False,
+                 max_buffer_size: int = 400):
+        self.pdu_encoder = None
+        self.sql_conn = sqlConn(export_db)
+        self.logger_file = logger_file
+        self.export_time = datetime.datetime.now()
+        self.exercise_id = exercise_id
+
+        self.max_buffer_size = max_buffer_size
+
+        self.entity_state_buffer = []
+
+        self.read_encoder()
+
+        if new_db:
+            # Creates the Event Report tables when it's a new db. Can be run every time, but unnecessary
+            ***REMOVED***()
+            create_tables(export_db)
+
+    def export(self, logger_pdu: LoggerPDU):
+        if type(logger_pdu.pdu) == opendis.dis7.EventReportPdu:
+            event_report = EventReportInterpreter(logger_pdu, self.pdu_encoder)
+            self._export_event_report(event_report)
         else:
-            errors += 1
-            separator_errors += 1
-    # data = [LoggerPDU(logger_line) for logger_line in raw_data]
-    # l_pdus = convert_to_pdus(data)
-    print("Loaded file")
+            pass
 
-logging.info(f"Total pdus:              {total}")
-logging.info(f"Total errors:            {errors},               {100 * errors/total}%")
-logging.info(f"Seperator errors:        {separator_errors},     {100 * separator_errors/total}%")
-logging.info(f"Unpacking time errors:   {struct_unpack_errors}, {100 * struct_unpack_errors/total}%")
-logging.info(f"Unpacking pdu errors:    {pdu_unpack_error},     {100 * pdu_unpack_error/total}%")
+    def read_encoder(self):
+        encoder_subdir = max(os.listdir("encoders/"))
+        with open(f"encoders/{encoder_subdir}/PduEncoder.json", 'r') as f:
+            encoder = json.load(f)
 
-# with lzma.open("C:/Users/gidonr/Desktop/integration_1003_2.lzma", 'r') as f:
-#     data = f.read().decode("utf-8")[:-2] + ']'
-#     print("Loaded file")
-#     j_data = json.loads(data)
-#     check_for(j_data, '8643', '208')
-# json_data = json.loads(data)
-# print("Loaded JSON")
+        self.pdu_encoder = encoder
 
-# export_json(json_data, r"\\files\ExpData\Merkava4Barak2022\LoggerSQLExporter\BLPduEncoder.xml",
-#             "integration_1003_2.lgr", conn, meta)
+    def _export_event_report(self, event_report: EventReportInterpreter):
+        # print(f"Exported event report: {event_report}")
+        consistent_base_data = {"LoggerFile": self.logger_file, "ExportTime": self.export_time,
+                                "ExerciseId": self.exercise_id}
+
+        data_to_insert = event_report.fixed_data | event_report.variable_data | event_report.base_data | \
+                         consistent_base_data
+
+        data_df = pd.DataFrame(data_to_insert)
+
+        data_df.to_sql(event_report.event_name, self.sql_conn, schema="dis", if_exists="append", index=False)
+
+
+def load_file_data(logger_file, new_db=False, debug=False):
+    if debug:
+        errors = 0
+        separator_errors = 0
+        struct_unpack_errors = 0
+        pdu_unpack_error = 0
+
+    with lzma.open(f"logs/{logger_file}", 'r') as f:
+        raw_data = f.read().split(b"line_separator")
+
+        data = []
+        logger_sql_exporter = LoggerSQLExporter(logger_file, "GidonLSETest", 97, new_db=new_db)
+
+        total = len(raw_data)
+        print(f"Total packets: {len(raw_data):,}")
+        for i, line in enumerate(raw_data):
+            if i % 100_000 == 0:
+                print(f"{i:,}")
+            if line.count(b"line_divider") == 2:
+                try:
+                    logger_pdu = LoggerPDU(line)
+
+                    data.append(logger_pdu)
+                    logger_sql_exporter.export(logger_pdu)
+
+                except ValueError:
+                    if debug:
+                        errors += 1
+                        separator_errors += 1
+                    continue
+                except BytesWarning:
+                    if debug:
+                        errors += 1
+                        pdu_unpack_error += 1
+                    continue
+                except struct.error:
+                    if debug:
+                        errors += 1
+                        struct_unpack_errors += 1
+                    continue
+                except KeyError:  # TODO Bad fix, there are event reports that are not wanted, so find a way to deal with them
+                    continue
+            else:
+                if debug:
+                    errors += 1
+                    separator_errors += 1
+                continue
+
+        # data = [LoggerPDU(logger_line) for logger_line in raw_data]
+        # l_pdus = convert_to_pdus(data)
+        print("Loaded file")
+    if debug:
+        logging.info(f"Total pdus:              {total}")
+        logging.info(f"Total errors:            {errors},               {100 * errors / total}%")
+        logging.info(f"Seperator errors:        {separator_errors},     {100 * separator_errors / total}%")
+        logging.info(f"Unpacking time errors:   {struct_unpack_errors}, {100 * struct_unpack_errors / total}%")
+        logging.info(f"Unpacking pdu errors:    {pdu_unpack_error},     {100 * pdu_unpack_error / total}%")
+
+
+if __name__ == "__main__":
+    load_file_data("exp_0_1807_3.lzma", new_db=True)
+
