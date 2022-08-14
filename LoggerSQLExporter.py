@@ -14,7 +14,7 @@ from ***REMOVED***.Tools import sqlConn
 
 from opendis.PduFactory import createPdu
 ***REMOVED***
-from ***REMOVED***.create_sql import create_tables
+***REMOVED***
 
 logging.basicConfig(filename="logger_exporter.log", encoding="utf-8", level=logging.DEBUG)
 
@@ -171,14 +171,22 @@ class LoggerSQLExporter:
         if new_db:
             # Creates the Event Report tables when it's a new db. Can be run every time, but unnecessary
             ***REMOVED***()
-            create_tables(export_db)
+            ***REMOVED***(export_db)
 
     def export(self, logger_pdu: LoggerPDU):
-        if type(logger_pdu.pdu) == opendis.dis7.EventReportPdu:
+        pdu_type = type(logger_pdu.pdu)
+        if pdu_type == opendis.dis7.EventReportPdu:
             event_report = EventReportInterpreter(logger_pdu, self.pdu_encoder)
             self._export_event_report(event_report)
         else:
-            pass
+            if pdu_type == opendis.dis7.EntityStatePdu:
+                self._export_entity_state(logger_pdu)
+            elif pdu_type == opendis.dis7.FirePdu:
+                self._export_fire_pdu(logger_pdu)
+            elif pdu_type == opendis.dis7.DetonationPdu:
+                self._export_detonation_pdu(logger_pdu)
+            elif pdu_type == opendis.dis7.TransmitterPdu:
+                self._export_transmitter_pdu(logger_pdu)
 
     def read_encoder(self):
         encoder_subdir = max(os.listdir("encoders/"))
@@ -199,8 +207,236 @@ class LoggerSQLExporter:
 
         data_df.to_sql(event_report.event_name, self.sql_conn, schema="dis", if_exists="append", index=False)
 
+    def _export_entity_state(self, logger_pdu: LoggerPDU):
+        base_data = {
+            "SenderIdSite": [logger_pdu.pdu.entityID.siteID],
+            "SenderIdHost": [logger_pdu.pdu.entityID.applicationID],
+            "SenderIdNum": [logger_pdu.pdu.entityID.entityID],
 
-def load_file_data(logger_file, new_db=False, debug=False):
+            "WorldTime": [datetime.datetime.fromtimestamp(logger_pdu.world_time)],
+            "PacketTime": [logger_pdu.packet_time],
+
+            "LoggerFile": [self.logger_file],
+            "ExportTime": [self.export_time],
+            "ExerciseId": [self.exercise_id]
+        }
+
+        # Ints
+        self._entity_state_ints(logger_pdu, base_data)
+        # Locations
+        self._entity_state_locs(logger_pdu, base_data)
+        # Texts
+        self._entity_state_texts(logger_pdu, base_data)
+
+    def _entity_state_ints(self, logger_pdu: LoggerPDU, base_data: dict):
+        # TODO discuss the removal of LifeformState, and Weapon2, along with potential adjustement of exported values to be inline with the DIS spec
+
+        # Reversed for ease of indexing, since the documentation talks of bit 0, and that is the rightmost digit
+        # in the non reversed number
+        entity_appearance = bin(logger_pdu.pdu.entityAppearance)[2:][::-1]
+
+        # Damage
+        entity_ints_damage = base_data.copy()
+        damage = int(entity_appearance[3:5], 2)
+        entity_ints_damage["IntType"] = ["Damage"]
+        entity_ints_damage["IntValue"] = [damage]
+        damage_df = pd.DataFrame(entity_ints_damage)
+
+        # Weapon1
+        entity_ints_weapon1 = base_data.copy()
+        weapon1 = logger_pdu.pdu.entityAppearance
+        entity_ints_weapon1["IntType"] = ["Weapon1"]
+        entity_ints_weapon1["IntValue"] = [weapon1]
+        weapon_df = pd.DataFrame(entity_ints_weapon1)
+
+        # forceId
+        entity_ints_forceid = base_data.copy()
+        forceid = logger_pdu.pdu.forceId
+        entity_ints_forceid["IntType"] = ["forceId"]
+        entity_ints_forceid["IntValue"] = [forceid]
+        forceid_df = pd.DataFrame(entity_ints_forceid)
+
+        damage_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
+        weapon_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
+        forceid_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
+
+    def _entity_state_locs(self, logger_pdu: LoggerPDU, base_data: dict):
+        entity_locs = base_data.copy()
+        entity_locs["GeoLocationX"] = [logger_pdu.pdu.entityLocation.x]
+        entity_locs["GeoLocationY"] = [logger_pdu.pdu.entityLocation.y]
+        entity_locs["GeoLocationZ"] = [logger_pdu.pdu.entityLocation.z]
+
+        entity_locs["GeoVelocityX"] = [logger_pdu.pdu.entityLinearVelocity.x]
+        entity_locs["GeoVelocityY"] = [logger_pdu.pdu.entityLinearVelocity.y]
+        entity_locs["GeoVelocityZ"] = [logger_pdu.pdu.entityLinearVelocity.z]
+
+        entity_locs["Psi"] = [logger_pdu.pdu.entityOrientation.psi]
+        entity_locs["Theta"] = [logger_pdu.pdu.entityOrientation.theta]
+        entity_locs["Phi"] = [logger_pdu.pdu.entityOrientation.phi]
+
+        locs_df = pd.DataFrame(entity_locs)
+        locs_df.to_sql("EntityStateLocations", self.sql_conn, schema="dis", if_exists="append", index=False)
+
+    def _entity_state_texts(self, logger_pdu: LoggerPDU, base_data: dict):
+        # TODO discuss the "Entity" field, and if it is necessary since it's just "Added" and "Removed"
+
+        # MarkingText
+        entity_texts_marking = base_data.copy()
+        entity_texts_marking["TextType"] = ["MarkingText"]
+        entity_texts_marking["TextValue"] = ["".join(map(chr, logger_pdu.pdu.marking.characters))]
+        marking_df = pd.DataFrame(entity_texts_marking)
+
+        # EntityType
+        entity_type = logger_pdu.pdu.entityType
+
+        entity_texts_type = base_data.copy()
+        entity_texts_type["TextType"] = ["EntityType"]
+        entity_texts_type[
+            "TextValue"] = [f"{entity_type.entityKind}:{entity_type.domain}:{entity_type.country}:{entity_type.category}:{entity_type.subcategory}:{entity_type.specific}:{entity_type.extra}"]
+        type_df = pd.DataFrame(entity_texts_type)
+
+        marking_df.to_sql("EntityStateTexts", self.sql_conn, schema="dis", if_exists="append", index=False)
+        type_df.to_sql("EntityStateTexts", self.sql_conn, schema="dis", if_exists="append", index=False)
+
+    def _export_fire_pdu(self, logger_pdu: LoggerPDU):
+        munition_type = logger_pdu.pdu.descriptor.munitionType
+
+
+        firepdu = {
+            "EventIdSite": [logger_pdu.pdu.eventID.simulationAddress.site],
+            "EventIdHost": [logger_pdu.pdu.eventID.simulationAddress.application],
+            "EventIdNum": [logger_pdu.pdu.eventID.eventNumber],
+
+            "AttackerIdSite": [logger_pdu.pdu.firingEntityID.siteID],
+            "AttackerIdHost": [logger_pdu.pdu.firingEntityID.applicationID],
+            "AttackerIdNum": [logger_pdu.pdu.firingEntityID.entityID],
+
+            "TargetIdSite": [logger_pdu.pdu.targetEntityID.siteID],
+            "TargetIdHost": [logger_pdu.pdu.targetEntityID.applicationID],
+            "TargetIdNum": [logger_pdu.pdu.targetEntityID.entityID],
+
+            "MunitionIdSite": [logger_pdu.pdu.munitionExpendibleID.siteID],
+            "MunitionIdHost": [logger_pdu.pdu.munitionExpendibleID.applicationID],
+            "MunitionIdNum": [logger_pdu.pdu.munitionExpendibleID.entityID],
+
+            "GeoLocationX": [logger_pdu.pdu.locationInWorldCoordinates.x],
+            "GeoLocationY": [logger_pdu.pdu.locationInWorldCoordinates.y],
+            "GeoLocationZ": [logger_pdu.pdu.locationInWorldCoordinates.z],
+
+            "GeoVelocityX": [logger_pdu.pdu.velocity.x],
+            "GeoVelocityY": [logger_pdu.pdu.velocity.y],
+            "GeoVelocityZ": [logger_pdu.pdu.velocity.z],
+
+            "MunitionType": [f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}"],
+
+            "FuseType": [logger_pdu.pdu.descriptor.fuse],
+            "Quantity": [logger_pdu.pdu.descriptor.quantity],
+            "Range": [logger_pdu.pdu.range],
+            "WarheadType": [logger_pdu.pdu.descriptor.warhead],
+
+            "WorldTime": [datetime.datetime.fromtimestamp(logger_pdu.world_time)],
+            "PacketTime": [logger_pdu.packet_time],
+
+            "LoggerFile": [self.logger_file],
+            "ExportTime": [self.export_time],
+            "ExerciseId": [self.exercise_id]
+        }
+        fire_df = pd.DataFrame(firepdu)
+
+        fire_df.to_sql("FirePdu", self.sql_conn, schema="dis", if_exists="append", index=False)
+
+    def _export_detonation_pdu(self, logger_pdu: LoggerPDU):
+        munition_type = logger_pdu.pdu.descriptor.munitionType
+
+
+        detonation_pdu = {
+            "EventIdSite": [logger_pdu.pdu.eventID.simulationAddress.site],
+            "EventIdHost": [logger_pdu.pdu.eventID.simulationAddress.application],
+            "EventIdNum": [logger_pdu.pdu.eventID.eventNumber],
+
+            "AttackerIdSite": [logger_pdu.pdu.firingEntityID.siteID],
+            "AttackerIdHost": [logger_pdu.pdu.firingEntityID.applicationID],
+            "AttackerIdNum": [logger_pdu.pdu.firingEntityID.entityID],
+
+            "TargetIdSite": [logger_pdu.pdu.targetEntityID.siteID],
+            "TargetIdHost": [logger_pdu.pdu.targetEntityID.applicationID],
+            "TargetIdNum": [logger_pdu.pdu.targetEntityID.entityID],
+
+            "MunitionIdSite": [logger_pdu.pdu.explodingEntityID.siteID],
+            "MunitionIdHost": [logger_pdu.pdu.explodingEntityID.applicationID],
+            "MunitionIdNum": [logger_pdu.pdu.explodingEntityID.entityID],
+
+            "GeoLocationX": [logger_pdu.pdu.locationInWorldCoordinates.x],
+            "GeoLocationY": [logger_pdu.pdu.locationInWorldCoordinates.y],
+            "GeoLocationZ": [logger_pdu.pdu.locationInWorldCoordinates.z],
+
+            "GeoVelocityX": [logger_pdu.pdu.velocity.x],
+            "GeoVelocityY": [logger_pdu.pdu.velocity.y],
+            "GeoVelocityZ": [logger_pdu.pdu.velocity.z],
+
+            "MunitionType": [f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}"],
+
+            "FuseType": [logger_pdu.pdu.descriptor.fuse],
+            "Quantity": [logger_pdu.pdu.descriptor.quantity],
+            "WarheadType": [logger_pdu.pdu.descriptor.warhead],
+
+            "WorldTime": [datetime.datetime.fromtimestamp(logger_pdu.world_time)],
+            "PacketTime": [logger_pdu.packet_time],
+
+            "LoggerFile": [self.logger_file],
+            "ExportTime": [self.export_time],
+            "ExerciseId": [self.exercise_id]
+        }
+        detonation_df = pd.DataFrame(detonation_pdu)
+
+        detonation_df.to_sql("DetonationPdu", self.sql_conn, schema="dis", if_exists="append", index=False)
+
+    def _export_transmitter_pdu(self, logger_pdu: LoggerPDU):
+        radio_entity_type = logger_pdu.pdu.radioEntityType
+
+        transmitter_pdu = {
+            "RadioID": [logger_pdu.pdu.radioNumber],
+
+            "RadioType": [f"{radio_entity_type.entityKind}:{radio_entity_type.domain}:{radio_entity_type.country}:{radio_entity_type.category}:{radio_entity_type.subcategory}:{radio_entity_type.specific}:{radio_entity_type.extra}"],
+
+            "TransmitState": [logger_pdu.pdu.transmitState],
+
+            "InputSource": [logger_pdu.pdu.inputSource],
+
+            "AntennaLocationX": [logger_pdu.pdu.antennaLocation.x],
+            "AntennaLocationY": [logger_pdu.pdu.antennaLocation.y],
+            "AntennaLocationZ": [logger_pdu.pdu.antennaLocation.z],
+
+            "RelativeAntennaLocationX": [logger_pdu.pdu.relativeAntennaLocation.x],
+            "RelativeAntennaLocationY": [logger_pdu.pdu.relativeAntennaLocation.y],
+            "RelativeAntennaLocationZ": [logger_pdu.pdu.relativeAntennaLocation.z],
+
+            "AntennaPatternType": [logger_pdu.pdu.antennaPatternType],
+
+            "Frequency": [logger_pdu.pdu.frequency],
+
+            "TransmitFrequencyBandwidth": [logger_pdu.pdu.transmitFrequencyBandwidth],
+
+            "Power": [logger_pdu.pdu.power],
+
+            "SenderIdSite": [logger_pdu.pdu.radioReferenceID.siteID],
+            "SenderIdHost": [logger_pdu.pdu.radioReferenceID.applicationID],
+            "SenderIdNum": [logger_pdu.pdu.radioReferenceID.entityID],
+
+            "WorldTime": [datetime.datetime.fromtimestamp(logger_pdu.world_time)],
+            "PacketTime": [logger_pdu.packet_time],
+
+            "LoggerFile": [self.logger_file],
+            "ExportTime": [self.export_time],
+            "ExerciseId": [self.exercise_id]
+        }
+
+        transmitter_df = pd.DataFrame(transmitter_pdu)
+
+        transmitter_df.to_sql("TransmitterPDU", self.sql_conn, schema="dis", if_exists="append", index=False)
+
+
+def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=False, debug=False):
     if debug:
         errors = 0
         separator_errors = 0
@@ -211,7 +447,7 @@ def load_file_data(logger_file, new_db=False, debug=False):
         raw_data = f.read().split(b"line_separator")
 
         data = []
-        logger_sql_exporter = LoggerSQLExporter(logger_file, "GidonLSETest", 97, new_db=new_db)
+        logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db)
 
         total = len(raw_data)
         print(f"Total packets: {len(raw_data):,}")
@@ -260,5 +496,4 @@ def load_file_data(logger_file, new_db=False, debug=False):
 
 
 if __name__ == "__main__":
-    load_file_data("exp_0_1807_3.lzma", new_db=True)
-
+    load_file_data("exp_0_1807_3.lzma", "GidonLSETest", 97, new_db=True)

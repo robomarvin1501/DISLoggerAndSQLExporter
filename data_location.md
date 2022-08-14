@@ -146,7 +146,7 @@ DetonationPDU
 TransmitterPDU
 ========
 - SenderId
-  - entityID (site=site, host=application, entity=entity)
+  - radioReferenceID (site=site, host=application, entity=entity)
 - RadioID
   - radioNumber
 - RadioType
