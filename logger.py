@@ -5,6 +5,7 @@ import sys
 import datetime
 
 from opendis.PduFactory import createPdu
+from LoggerSQLExporter import LoggerSQLExporter
 
 
 class DISReceiver:
@@ -108,14 +109,29 @@ class DataWriter:
 lzc = lzma.LZMACompressor()
 
 EXERCISE_ID = 97
+export = False  # TODO move to config file
+logger_file = "part_exp.lzma"  # TODO move to config file
 
-with DataWriter("exp_0_1807_3.lzma", "logs", lzc) as writer:
-    with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
-        for (address, data, packettime, world_timestamp) in r:
-            print(f"Got packet from {address}: {data}")
-            # Do stuff with data
-            # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
-            writer.write(data, packettime, world_timestamp)
+
+if export:
+    LSE = LoggerSQLExporter(logger_file)
+
+    with DataWriter(logger_file, "logs", lzc) as writer:
+        with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+            for (address, data, packettime, world_timestamp) in r:
+                # print(f"Got packet from {address}: {data}")
+                LSE.buffer_bytes(data)
+                # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
+                writer.write(data, packettime, world_timestamp)
+
+
+else:
+    with DataWriter(logger_file, "logs", lzc) as writer:
+        with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+            for (address, data, packettime, world_timestamp) in r:
+                print(f"Got packet from {address}: {data}")
+                # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
+                writer.write(data, packettime, world_timestamp)
 
 # receiver_thread.join()
 print("Program ended")

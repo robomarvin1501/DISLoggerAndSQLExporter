@@ -5,6 +5,7 @@ import json
 import os
 import struct
 import logging
+import time
 
 import opendis
 
@@ -17,40 +18,6 @@ from opendis.PduFactory import createPdu
 ***REMOVED***
 
 logging.basicConfig(filename="logger_exporter.log", encoding="utf-8", level=logging.DEBUG)
-
-
-def check_for(data, host: str, num: str, site: str = '1'):
-    out = set()
-    for i, p in enumerate(data):
-        if type(p) == opendis.dis7.EntityStatePdu:
-            if p.entityID.applicationID == host and \
-                    p.entityID.entityID == num:
-                out.add((i, p.entityID))
-    return out
-
-
-def get_names(data):
-    out = set()
-    for p in data:
-        if type(p) == opendis.dis7.EntityStatePdu:
-            out.add((''.join(map(chr, p.marking.characters)),
-                     str(p.entityID)))
-    return out
-
-
-def convert_to_pdus(l_data: list[bytes]):
-    pdus = []
-    n_failures = 0
-    for i, p in enumerate(l_data):
-        try:
-            pdus.append(createPdu(p))
-        except struct.error:
-            # print(f"Possibly incomplete packet of bytes at position {i}/{len(l_data) - 1}")
-            logging.info(f"Possibly incomplete packet of bytes at position {i}/{len(l_data) - 1}")
-            n_failures += 1
-    logging.warning(f"Total number of failed packages: {n_failures}/{len(l_data)} : {100 * n_failures / len(l_data)}%")
-
-    return pdus
 
 
 class LoggerPDU:
@@ -162,6 +129,8 @@ class LoggerSQLExporter:
         self.export_time = datetime.datetime.now()
         self.exercise_id = exercise_id
 
+        self.dfs = {}
+
         self.max_buffer_size = max_buffer_size
 
         self.entity_state_buffer = []
@@ -180,7 +149,9 @@ class LoggerSQLExporter:
             self._export_event_report(event_report)
         else:
             if pdu_type == opendis.dis7.EntityStatePdu:
+                # ent_state_start = time.perf_counter()
                 self._export_entity_state(logger_pdu)
+                # print(f"entity state: {time.perf_counter() - ent_state_start}")
             elif pdu_type == opendis.dis7.FirePdu:
                 self._export_fire_pdu(logger_pdu)
             elif pdu_type == opendis.dis7.DetonationPdu:
@@ -205,7 +176,10 @@ class LoggerSQLExporter:
 
         data_df = pd.DataFrame(data_to_insert)
 
-        data_df.to_sql(event_report.event_name, self.sql_conn, schema="dis", if_exists="append", index=False)
+        # data_df.to_sql(event_report.event_name, self.sql_conn, schema="dis", if_exists="append", index=False)
+        # self.to_sql_queue.put((event_report.event_name, data_df))
+
+        self._batch_dfs(event_report.event_name, data_df)
 
     def _export_entity_state(self, logger_pdu: LoggerPDU):
         base_data = {
@@ -256,9 +230,18 @@ class LoggerSQLExporter:
         entity_ints_forceid["IntValue"] = [forceid]
         forceid_df = pd.DataFrame(entity_ints_forceid)
 
-        damage_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
-        weapon_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
-        forceid_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
+
+        # damage_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # weapon_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # forceid_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
+
+        # self.to_sql_queue.put(("EntityStateInts", damage_df))
+        # self.to_sql_queue.put(("EntityStateInts", weapon_df))
+        # self.to_sql_queue.put(("EntityStateInts", forceid_df))
+
+        overall_dfs = pd.concat([damage_df, weapon_df, forceid_df])
+
+        self._batch_dfs("EntityStateInts", overall_dfs)
 
     def _entity_state_locs(self, logger_pdu: LoggerPDU, base_data: dict):
         entity_locs = base_data.copy()
@@ -275,11 +258,12 @@ class LoggerSQLExporter:
         entity_locs["Phi"] = [logger_pdu.pdu.entityOrientation.phi]
 
         locs_df = pd.DataFrame(entity_locs)
-        locs_df.to_sql("EntityStateLocations", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # locs_df.to_sql("EntityStateLocations", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # self.to_sql_queue.put(("EntityStateLocations", locs_df))
+
+        self._batch_dfs("EntityStateLocations", locs_df)
 
     def _entity_state_texts(self, logger_pdu: LoggerPDU, base_data: dict):
-        # TODO discuss the "Entity" field, and if it is necessary since it's just "Added" and "Removed"
-
         # MarkingText
         entity_texts_marking = base_data.copy()
         entity_texts_marking["TextType"] = ["MarkingText"]
@@ -292,15 +276,21 @@ class LoggerSQLExporter:
         entity_texts_type = base_data.copy()
         entity_texts_type["TextType"] = ["EntityType"]
         entity_texts_type[
-            "TextValue"] = [f"{entity_type.entityKind}:{entity_type.domain}:{entity_type.country}:{entity_type.category}:{entity_type.subcategory}:{entity_type.specific}:{entity_type.extra}"]
+            "TextValue"] = [
+            f"{entity_type.entityKind}:{entity_type.domain}:{entity_type.country}:{entity_type.category}:{entity_type.subcategory}:{entity_type.specific}:{entity_type.extra}"]
         type_df = pd.DataFrame(entity_texts_type)
 
-        marking_df.to_sql("EntityStateTexts", self.sql_conn, schema="dis", if_exists="append", index=False)
-        type_df.to_sql("EntityStateTexts", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # marking_df.to_sql("EntityStateTexts", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # type_df.to_sql("EntityStateTexts", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # self.to_sql_queue.put(("EntityStateTexts", marking_df))
+        # self.to_sql_queue.put(("EntityStateTexts", type_df))
+
+        overall_df = pd.concat([marking_df, type_df])
+
+        self._batch_dfs("EntityStateTexts", overall_df)
 
     def _export_fire_pdu(self, logger_pdu: LoggerPDU):
         munition_type = logger_pdu.pdu.descriptor.munitionType
-
 
         firepdu = {
             "EventIdSite": [logger_pdu.pdu.eventID.simulationAddress.site],
@@ -327,7 +317,8 @@ class LoggerSQLExporter:
             "GeoVelocityY": [logger_pdu.pdu.velocity.y],
             "GeoVelocityZ": [logger_pdu.pdu.velocity.z],
 
-            "MunitionType": [f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}"],
+            "MunitionType": [
+                f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}"],
 
             "FuseType": [logger_pdu.pdu.descriptor.fuse],
             "Quantity": [logger_pdu.pdu.descriptor.quantity],
@@ -343,11 +334,13 @@ class LoggerSQLExporter:
         }
         fire_df = pd.DataFrame(firepdu)
 
-        fire_df.to_sql("FirePdu", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # fire_df.to_sql("FirePdu", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # self.to_sql_queue.put(("FirePdu", fire_df))
+
+        self._batch_dfs("FirePdu", fire_df)
 
     def _export_detonation_pdu(self, logger_pdu: LoggerPDU):
         munition_type = logger_pdu.pdu.descriptor.munitionType
-
 
         detonation_pdu = {
             "EventIdSite": [logger_pdu.pdu.eventID.simulationAddress.site],
@@ -374,7 +367,8 @@ class LoggerSQLExporter:
             "GeoVelocityY": [logger_pdu.pdu.velocity.y],
             "GeoVelocityZ": [logger_pdu.pdu.velocity.z],
 
-            "MunitionType": [f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}"],
+            "MunitionType": [
+                f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}"],
 
             "FuseType": [logger_pdu.pdu.descriptor.fuse],
             "Quantity": [logger_pdu.pdu.descriptor.quantity],
@@ -389,7 +383,10 @@ class LoggerSQLExporter:
         }
         detonation_df = pd.DataFrame(detonation_pdu)
 
-        detonation_df.to_sql("DetonationPdu", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # detonation_df.to_sql("DetonationPdu", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # self.to_sql_queue.put(("DetonationPdu", detonation_df))
+
+        self._batch_dfs("DetonationPdu", detonation_df)
 
     def _export_transmitter_pdu(self, logger_pdu: LoggerPDU):
         radio_entity_type = logger_pdu.pdu.radioEntityType
@@ -397,7 +394,8 @@ class LoggerSQLExporter:
         transmitter_pdu = {
             "RadioID": [logger_pdu.pdu.radioNumber],
 
-            "RadioType": [f"{radio_entity_type.entityKind}:{radio_entity_type.domain}:{radio_entity_type.country}:{radio_entity_type.category}:{radio_entity_type.subcategory}:{radio_entity_type.specific}:{radio_entity_type.extra}"],
+            "RadioType": [
+                f"{radio_entity_type.entityKind}:{radio_entity_type.domain}:{radio_entity_type.country}:{radio_entity_type.category}:{radio_entity_type.subcategory}:{radio_entity_type.specific}:{radio_entity_type.extra}"],
 
             "TransmitState": [logger_pdu.pdu.transmitState],
 
@@ -433,7 +431,27 @@ class LoggerSQLExporter:
 
         transmitter_df = pd.DataFrame(transmitter_pdu)
 
-        transmitter_df.to_sql("TransmitterPDU", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # transmitter_df.to_sql("TransmitterPDU", self.sql_conn, schema="dis", if_exists="append", index=False)
+        # self.to_sql_queue.put(("TransmitterPDU", transmitter_df))
+
+        self._batch_dfs("TransmitterPDU", transmitter_df)
+
+    def _batch_dfs(self, table, dfs):
+        if table in self.dfs:
+            self.dfs[table] = self.dfs[table].append(dfs)
+        else:
+            self.dfs[table] = dfs
+
+    def export_batches(self):
+        for df_name in self.dfs.copy():
+            t = self.dfs.pop(df_name)
+            print(f"Inserting {len(t)} rows into {df_name}")
+            t.to_sql(df_name, self.sql_conn, schema="dis", if_exists="append", index=False)
+
+    # def _export_queue(self):
+    #     for _ in range(self.to_sql_queue.qsize()):
+    #         t = self.to_sql_queue.get()  # (str, pd.DataFrame)
+    #         t[1].to_sql(t[0], self.sql_conn, schema="dis", if_exists="append", index=False)
 
 
 def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=False, debug=False):
@@ -454,12 +472,21 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
         for i, line in enumerate(raw_data):
             if i % 100_000 == 0:
                 print(f"{i:,}")
+
+            # if i % 1000 == 0 and i != 0:
+            #     logger_sql_exporter.export_batches()
+
             if line.count(b"line_divider") == 2:
                 try:
                     logger_pdu = LoggerPDU(line)
 
                     data.append(logger_pdu)
+
+                    # threading.Thread(target=logger_sql_exporter.export, args=(logger_pdu,), daemon=True).start()
+                    ent_state_start = time.perf_counter()
                     logger_sql_exporter.export(logger_pdu)
+                    print(f"Export pdu: {time.perf_counter() - ent_state_start}")
+
 
                 except ValueError:
                     if debug:
@@ -496,4 +523,7 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
 
 
 if __name__ == "__main__":
-    load_file_data("exp_0_1807_3.lzma", "GidonLSETest", 97, new_db=True)
+    start_time = time.perf_counter()
+    load_file_data("part_exp.lzma", "GidonLSETest", 97, new_db=False)
+    end_time = time.perf_counter()
+    print(f"Execution time: {datetime.timedelta(seconds=(end_time - start_time))}")
