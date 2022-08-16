@@ -7,9 +7,11 @@ import struct
 import logging
 import time
 
-import opendis
+import sqlalchemy
 
 import pandas as pd
+
+import opendis
 
 from ***REMOVED***.Tools import sqlConn
 
@@ -18,6 +20,10 @@ from opendis.PduFactory import createPdu
 ***REMOVED***
 
 logging.basicConfig(filename="logger_exporter.log", encoding="utf-8", level=logging.DEBUG)
+
+
+def merge_dicts_of_lists(a: dict, b: dict):
+    return {key: a.get(key, []) + b.get(key, []) for key in (a.keys() | b.keys())}
 
 
 class LoggerPDU:
@@ -100,16 +106,16 @@ class EventReportInterpreter:
         self._get_base_data()
 
     def _get_base_data(self):
-        self.base_data["SenderIdSite"] = self.logger_pdu.pdu.originatingEntityID.siteID
-        self.base_data["SenderIdHost"] = self.logger_pdu.pdu.originatingEntityID.applicationID
-        self.base_data["SenderIdNum"] = self.logger_pdu.pdu.originatingEntityID.entityID
+        self.base_data["SenderIdSite"] = [self.logger_pdu.pdu.originatingEntityID.siteID]
+        self.base_data["SenderIdHost"] = [self.logger_pdu.pdu.originatingEntityID.applicationID]
+        self.base_data["SenderIdNum"] = [self.logger_pdu.pdu.originatingEntityID.entityID]
 
-        self.base_data["ReceiverIdSite"] = self.logger_pdu.pdu.receivingEntityID.siteID
-        self.base_data["ReceiverIdHost"] = self.logger_pdu.pdu.receivingEntityID.applicationID
-        self.base_data["ReceiverIdNum"] = self.logger_pdu.pdu.receivingEntityID.entityID
+        self.base_data["ReceiverIdSite"] = [self.logger_pdu.pdu.receivingEntityID.siteID]
+        self.base_data["ReceiverIdHost"] = [self.logger_pdu.pdu.receivingEntityID.applicationID]
+        self.base_data["ReceiverIdNum"] = [self.logger_pdu.pdu.receivingEntityID.entityID]
 
-        self.base_data["WorldTime"] = datetime.datetime.fromtimestamp(self.logger_pdu.world_time)
-        self.base_data["PacketTime"] = self.logger_pdu.packet_time
+        self.base_data["WorldTime"] = [datetime.datetime.fromtimestamp(self.logger_pdu.world_time)]
+        self.base_data["PacketTime"] = [self.logger_pdu.packet_time]
         # Loggerfile, Export time, and exercise id are dealt by the LSE
 
 
@@ -125,11 +131,23 @@ class LoggerSQLExporter:
                  max_buffer_size: int = 400):
         self.pdu_encoder = None
         self.sql_conn = sqlConn(export_db)
+        self.sql_meta = sqlalchemy.MetaData(schema="dis")
         self.logger_file = logger_file
         self.export_time = datetime.datetime.now()
         self.exercise_id = exercise_id
 
         self.dfs = {}
+        self.dict_batches = {}
+
+        # self.sql_tables = {
+        #     "EntityStateInts": sqlalchemy.Table("EntityStateInts", self.sql_meta, autoload_with=self.sql_conn.engine),
+        #     "EntityStateLocations": sqlalchemy.Table("EntityStateLocations", self.sql_meta,
+        #                                              autoload_with=self.sql_conn.engine),
+        #     "EntityStateTexts": sqlalchemy.Table("EntityStateTexts", self.sql_meta, autoload_with=self.sql_conn.engine),
+        #     "FirePdu": sqlalchemy.Table("FirePdu", self.sql_meta, autoload_with=self.sql_conn.engine),
+        #     "DetonationPdu": sqlalchemy.Table("DetonationPdu", self.sql_meta, autoload_with=self.sql_conn.engine),
+        #     "TransmitterPDU": sqlalchemy.Table("TransmitterPDU", self.sql_meta, autoload_with=self.sql_conn.engine),
+        # }
 
         self.max_buffer_size = max_buffer_size
 
@@ -168,18 +186,13 @@ class LoggerSQLExporter:
 
     def _export_event_report(self, event_report: EventReportInterpreter):
         # print(f"Exported event report: {event_report}")
-        consistent_base_data = {"LoggerFile": self.logger_file, "ExportTime": self.export_time,
-                                "ExerciseId": self.exercise_id}
+        consistent_base_data = {"LoggerFile": [self.logger_file], "ExportTime": [self.export_time],
+                                "ExerciseId": [self.exercise_id]}
 
         data_to_insert = event_report.fixed_data | event_report.variable_data | event_report.base_data | \
                          consistent_base_data
 
-        data_df = pd.DataFrame(data_to_insert)
-
-        # data_df.to_sql(event_report.event_name, self.sql_conn, schema="dis", if_exists="append", index=False)
-        # self.to_sql_queue.put((event_report.event_name, data_df))
-
-        self._batch_dfs(event_report.event_name, data_df)
+        self._batch_dicts(event_report.event_name, data_to_insert)
 
     def _export_entity_state(self, logger_pdu: LoggerPDU):
         base_data = {
@@ -210,84 +223,63 @@ class LoggerSQLExporter:
         entity_appearance = bin(logger_pdu.pdu.entityAppearance)[2:][::-1]
 
         # Damage
-        entity_ints_damage = base_data.copy()
         damage = int(entity_appearance[3:5], 2)
-        entity_ints_damage["IntType"] = ["Damage"]
-        entity_ints_damage["IntValue"] = [damage]
-        damage_df = pd.DataFrame(entity_ints_damage)
+        entity_ints_damage = base_data | {
+            "IntType": ["Damage"],
+            "IntValue": [damage]
+        }
 
         # Weapon1
-        entity_ints_weapon1 = base_data.copy()
-        weapon1 = logger_pdu.pdu.entityAppearance
-        entity_ints_weapon1["IntType"] = ["Weapon1"]
-        entity_ints_weapon1["IntValue"] = [weapon1]
-        weapon_df = pd.DataFrame(entity_ints_weapon1)
+        entity_ints_weapon1 = base_data | {
+            "IntType": ["Weapon1"],
+            "IntValue": [logger_pdu.pdu.entityAppearance]
+        }
 
         # forceId
-        entity_ints_forceid = base_data.copy()
-        forceid = logger_pdu.pdu.forceId
-        entity_ints_forceid["IntType"] = ["forceId"]
-        entity_ints_forceid["IntValue"] = [forceid]
-        forceid_df = pd.DataFrame(entity_ints_forceid)
+        entity_ints_forceid = base_data | {
+            "IntType": ["forceId"],
+            "IntValue": [logger_pdu.pdu.forceId]
+        }
 
+        overall_dicts = merge_dicts_of_lists(entity_ints_damage, entity_ints_weapon1)
+        overall_dicts = merge_dicts_of_lists(overall_dicts, entity_ints_forceid)
 
-        # damage_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
-        # weapon_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
-        # forceid_df.to_sql("EntityStateInts", self.sql_conn, schema="dis", if_exists="append", index=False)
-
-        # self.to_sql_queue.put(("EntityStateInts", damage_df))
-        # self.to_sql_queue.put(("EntityStateInts", weapon_df))
-        # self.to_sql_queue.put(("EntityStateInts", forceid_df))
-
-        overall_dfs = pd.concat([damage_df, weapon_df, forceid_df])
-
-        self._batch_dfs("EntityStateInts", overall_dfs)
+        self._batch_dicts("EntityStateInts", overall_dicts)
 
     def _entity_state_locs(self, logger_pdu: LoggerPDU, base_data: dict):
-        entity_locs = base_data.copy()
-        entity_locs["GeoLocationX"] = [logger_pdu.pdu.entityLocation.x]
-        entity_locs["GeoLocationY"] = [logger_pdu.pdu.entityLocation.y]
-        entity_locs["GeoLocationZ"] = [logger_pdu.pdu.entityLocation.z]
+        entity_locs = base_data | {
+            "GeoLocationX": [logger_pdu.pdu.entityLocation.x],
+            "GeoLocationY": [logger_pdu.pdu.entityLocation.y],
+            "GeoLocationZ": [logger_pdu.pdu.entityLocation.z],
 
-        entity_locs["GeoVelocityX"] = [logger_pdu.pdu.entityLinearVelocity.x]
-        entity_locs["GeoVelocityY"] = [logger_pdu.pdu.entityLinearVelocity.y]
-        entity_locs["GeoVelocityZ"] = [logger_pdu.pdu.entityLinearVelocity.z]
+            "GeoVelocityX": [logger_pdu.pdu.entityLinearVelocity.x],
+            "GeoVelocityY": [logger_pdu.pdu.entityLinearVelocity.y],
+            "GeoVelocityZ": [logger_pdu.pdu.entityLinearVelocity.z],
 
-        entity_locs["Psi"] = [logger_pdu.pdu.entityOrientation.psi]
-        entity_locs["Theta"] = [logger_pdu.pdu.entityOrientation.theta]
-        entity_locs["Phi"] = [logger_pdu.pdu.entityOrientation.phi]
+            "Psi": [logger_pdu.pdu.entityOrientation.psi],
+            "Theta": [logger_pdu.pdu.entityOrientation.theta],
+            "Phi": [logger_pdu.pdu.entityOrientation.phi]
+        }
 
-        locs_df = pd.DataFrame(entity_locs)
-        # locs_df.to_sql("EntityStateLocations", self.sql_conn, schema="dis", if_exists="append", index=False)
-        # self.to_sql_queue.put(("EntityStateLocations", locs_df))
-
-        self._batch_dfs("EntityStateLocations", locs_df)
+        self._batch_dicts("EntityStateLocations", entity_locs)
 
     def _entity_state_texts(self, logger_pdu: LoggerPDU, base_data: dict):
         # MarkingText
-        entity_texts_marking = base_data.copy()
-        entity_texts_marking["TextType"] = ["MarkingText"]
-        entity_texts_marking["TextValue"] = ["".join(map(chr, logger_pdu.pdu.marking.characters))]
-        marking_df = pd.DataFrame(entity_texts_marking)
+        entity_texts_marking = base_data | {
+            "TextType": ["MarkingText"],
+            "TextValue": ["".join(map(chr, logger_pdu.pdu.marking.characters))]
+        }
 
         # EntityType
         entity_type = logger_pdu.pdu.entityType
+        entity_texts_type = base_data | {
+            "TextType": ["EntityType"],
+            "TextValue": [
+                f"{entity_type.entityKind}:{entity_type.domain}:{entity_type.country}:{entity_type.category}:{entity_type.subcategory}:{entity_type.specific}:{entity_type.extra}"]
+        }
+        overall_dicts = merge_dicts_of_lists(entity_texts_marking, entity_texts_type)
 
-        entity_texts_type = base_data.copy()
-        entity_texts_type["TextType"] = ["EntityType"]
-        entity_texts_type[
-            "TextValue"] = [
-            f"{entity_type.entityKind}:{entity_type.domain}:{entity_type.country}:{entity_type.category}:{entity_type.subcategory}:{entity_type.specific}:{entity_type.extra}"]
-        type_df = pd.DataFrame(entity_texts_type)
-
-        # marking_df.to_sql("EntityStateTexts", self.sql_conn, schema="dis", if_exists="append", index=False)
-        # type_df.to_sql("EntityStateTexts", self.sql_conn, schema="dis", if_exists="append", index=False)
-        # self.to_sql_queue.put(("EntityStateTexts", marking_df))
-        # self.to_sql_queue.put(("EntityStateTexts", type_df))
-
-        overall_df = pd.concat([marking_df, type_df])
-
-        self._batch_dfs("EntityStateTexts", overall_df)
+        self._batch_dicts("EntityStateTexts", overall_dicts)
 
     def _export_fire_pdu(self, logger_pdu: LoggerPDU):
         munition_type = logger_pdu.pdu.descriptor.munitionType
@@ -332,12 +324,8 @@ class LoggerSQLExporter:
             "ExportTime": [self.export_time],
             "ExerciseId": [self.exercise_id]
         }
-        fire_df = pd.DataFrame(firepdu)
 
-        # fire_df.to_sql("FirePdu", self.sql_conn, schema="dis", if_exists="append", index=False)
-        # self.to_sql_queue.put(("FirePdu", fire_df))
-
-        self._batch_dfs("FirePdu", fire_df)
+        self._batch_dicts("FirePdu", firepdu)
 
     def _export_detonation_pdu(self, logger_pdu: LoggerPDU):
         munition_type = logger_pdu.pdu.descriptor.munitionType
@@ -381,12 +369,8 @@ class LoggerSQLExporter:
             "ExportTime": [self.export_time],
             "ExerciseId": [self.exercise_id]
         }
-        detonation_df = pd.DataFrame(detonation_pdu)
 
-        # detonation_df.to_sql("DetonationPdu", self.sql_conn, schema="dis", if_exists="append", index=False)
-        # self.to_sql_queue.put(("DetonationPdu", detonation_df))
-
-        self._batch_dfs("DetonationPdu", detonation_df)
+        self._batch_dicts("DetonationPdu", detonation_pdu)
 
     def _export_transmitter_pdu(self, logger_pdu: LoggerPDU):
         radio_entity_type = logger_pdu.pdu.radioEntityType
@@ -429,29 +413,24 @@ class LoggerSQLExporter:
             "ExerciseId": [self.exercise_id]
         }
 
-        transmitter_df = pd.DataFrame(transmitter_pdu)
 
-        # transmitter_df.to_sql("TransmitterPDU", self.sql_conn, schema="dis", if_exists="append", index=False)
-        # self.to_sql_queue.put(("TransmitterPDU", transmitter_df))
+        self._batch_dicts("TransmitterPDU", transmitter_pdu)
 
-        self._batch_dfs("TransmitterPDU", transmitter_df)
+    def _batch_dicts(self, table, d: dict):
+        try:
+            current_table = self.dict_batches[table]
+            self.dict_batches[table] = merge_dicts_of_lists(current_table, d)
+        except KeyError:
+            self.dict_batches[table] = d
 
-    def _batch_dfs(self, table, dfs):
-        if table in self.dfs:
-            self.dfs[table] = self.dfs[table].append(dfs)
-        else:
-            self.dfs[table] = dfs
 
     def export_batches(self):
-        for df_name in self.dfs.copy():
-            t = self.dfs.pop(df_name)
-            print(f"Inserting {len(t)} rows into {df_name}")
-            t.to_sql(df_name, self.sql_conn, schema="dis", if_exists="append", index=False)
+        for table_name in self.dict_batches.copy():
+            t = pd.DataFrame(self.dict_batches.pop(table_name))
+            # print(f"Inserting {len(t)} rows into {table_name}")
+            # t.to_sql(table_name, self.sql_conn, schema="dis", if_exists="append", index=False)
 
-    # def _export_queue(self):
-    #     for _ in range(self.to_sql_queue.qsize()):
-    #         t = self.to_sql_queue.get()  # (str, pd.DataFrame)
-    #         t[1].to_sql(t[0], self.sql_conn, schema="dis", if_exists="append", index=False)
+        self.dict_batches = {}
 
 
 def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=False, debug=False):
@@ -468,24 +447,26 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
         logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db)
 
         total = len(raw_data)
+        print(f"Start time: {datetime.datetime.now()}")
         print(f"Total packets: {len(raw_data):,}")
         for i, line in enumerate(raw_data):
             if i % 100_000 == 0:
                 print(f"{i:,}")
 
-            # if i % 1000 == 0 and i != 0:
-            #     logger_sql_exporter.export_batches()
+            if i % 10_000 == 0 and i != 0:
+                logger_sql_exporter.export_batches()
 
             if line.count(b"line_divider") == 2:
                 try:
+                    # ent_state_start = time.perf_counter()
                     logger_pdu = LoggerPDU(line)
 
                     data.append(logger_pdu)
 
                     # threading.Thread(target=logger_sql_exporter.export, args=(logger_pdu,), daemon=True).start()
-                    ent_state_start = time.perf_counter()
                     logger_sql_exporter.export(logger_pdu)
-                    print(f"Export pdu: {time.perf_counter() - ent_state_start}")
+                    # print(f"Export {type(logger_pdu.pdu)}: {time.perf_counter() - ent_state_start}")
+                    # logging.info(f"{type(logger_pdu.pdu)} : {time.perf_counter() - ent_state_start}")
 
 
                 except ValueError:
@@ -524,6 +505,6 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
 
 if __name__ == "__main__":
     start_time = time.perf_counter()
-    load_file_data("part_exp.lzma", "GidonLSETest", 97, new_db=False)
+    load_file_data("part_exp.lzma", "GidonLSETest", 97, new_db=True)
     end_time = time.perf_counter()
     print(f"Execution time: {datetime.timedelta(seconds=(end_time - start_time))}")
