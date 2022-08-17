@@ -9,8 +9,6 @@ import time
 
 import sqlalchemy
 
-import pandas as pd
-
 import opendis
 
 from ***REMOVED***.Tools import sqlConn
@@ -84,7 +82,7 @@ class EventReportInterpreter:
         for var_data, data_name in zip(self.logger_pdu.pdu.variableDatums,
                                        self.pdu_encoder[str(self.event_num)]["VariableData"].keys()):
             # self.variable_data.append((data_name, [''.join(map(chr, var_data.variableData))]))
-            self.variable_data[data_name] = [''.join(map(chr, var_data.variableData))]
+            self.variable_data[data_name] = ''.join(map(chr, var_data.variableData))
 
         for fixed_data, data_name, data_type in zip(self.logger_pdu.pdu.fixedDatums,
                                                     self.pdu_encoder[str(self.event_num)]["FixedData"].keys(),
@@ -97,25 +95,25 @@ class EventReportInterpreter:
                 datum_as_float = struct.unpack("!f", datum_as_bytes)[0]
 
                 # self.fixed_data.append((data_name, [datum_as_float]))
-                self.fixed_data[data_name] = [datum_as_float]
+                self.fixed_data[data_name] = datum_as_float
 
             elif data_type == "Int32":
                 # self.fixed_data.append((data_name, [fixed_data.fixedDatumValue]))
-                self.fixed_data[data_name] = [fixed_data.fixedDatumValue]
+                self.fixed_data[data_name] = fixed_data.fixedDatumValue
 
         self._get_base_data()
 
     def _get_base_data(self):
-        self.base_data["SenderIdSite"] = [self.logger_pdu.pdu.originatingEntityID.siteID]
-        self.base_data["SenderIdHost"] = [self.logger_pdu.pdu.originatingEntityID.applicationID]
-        self.base_data["SenderIdNum"] = [self.logger_pdu.pdu.originatingEntityID.entityID]
+        self.base_data["SenderIdSite"] = self.logger_pdu.pdu.originatingEntityID.siteID
+        self.base_data["SenderIdHost"] = self.logger_pdu.pdu.originatingEntityID.applicationID
+        self.base_data["SenderIdNum"] = self.logger_pdu.pdu.originatingEntityID.entityID
 
-        self.base_data["ReceiverIdSite"] = [self.logger_pdu.pdu.receivingEntityID.siteID]
-        self.base_data["ReceiverIdHost"] = [self.logger_pdu.pdu.receivingEntityID.applicationID]
-        self.base_data["ReceiverIdNum"] = [self.logger_pdu.pdu.receivingEntityID.entityID]
+        self.base_data["ReceiverIdSite"] = self.logger_pdu.pdu.receivingEntityID.siteID
+        self.base_data["ReceiverIdHost"] = self.logger_pdu.pdu.receivingEntityID.applicationID
+        self.base_data["ReceiverIdNum"] = self.logger_pdu.pdu.receivingEntityID.entityID
 
-        self.base_data["WorldTime"] = [datetime.datetime.fromtimestamp(self.logger_pdu.world_time)]
-        self.base_data["PacketTime"] = [self.logger_pdu.packet_time]
+        self.base_data["WorldTime"] = datetime.datetime.fromtimestamp(self.logger_pdu.world_time)
+        self.base_data["PacketTime"] = self.logger_pdu.packet_time
         # Loggerfile, Export time, and exercise id are dealt by the LSE
 
 
@@ -130,24 +128,25 @@ class LoggerSQLExporter:
     def __init__(self, logger_file: str, export_db: str, exercise_id: int, new_db: bool = False,
                  max_buffer_size: int = 400):
         self.pdu_encoder = None
+
         self.sql_conn = sqlConn(export_db)
         self.sql_meta = sqlalchemy.MetaData(schema="dis")
+
         self.logger_file = logger_file
         self.export_time = datetime.datetime.now()
         self.exercise_id = exercise_id
 
-        self.dfs = {}
         self.dict_batches = {}
 
-        # self.sql_tables = {
-        #     "EntityStateInts": sqlalchemy.Table("EntityStateInts", self.sql_meta, autoload_with=self.sql_conn.engine),
-        #     "EntityStateLocations": sqlalchemy.Table("EntityStateLocations", self.sql_meta,
-        #                                              autoload_with=self.sql_conn.engine),
-        #     "EntityStateTexts": sqlalchemy.Table("EntityStateTexts", self.sql_meta, autoload_with=self.sql_conn.engine),
-        #     "FirePdu": sqlalchemy.Table("FirePdu", self.sql_meta, autoload_with=self.sql_conn.engine),
-        #     "DetonationPdu": sqlalchemy.Table("DetonationPdu", self.sql_meta, autoload_with=self.sql_conn.engine),
-        #     "TransmitterPDU": sqlalchemy.Table("TransmitterPDU", self.sql_meta, autoload_with=self.sql_conn.engine),
-        # }
+        self.sql_tables = {
+            "EntityStateInts": sqlalchemy.Table("EntityStateInts", self.sql_meta, autoload_with=self.sql_conn.engine),
+            "EntityStateLocations": sqlalchemy.Table("EntityStateLocations", self.sql_meta,
+                                                     autoload_with=self.sql_conn.engine),
+            "EntityStateTexts": sqlalchemy.Table("EntityStateTexts", self.sql_meta, autoload_with=self.sql_conn.engine),
+            "FirePdu": sqlalchemy.Table("FirePdu", self.sql_meta, autoload_with=self.sql_conn.engine),
+            "DetonationPdu": sqlalchemy.Table("DetonationPdu", self.sql_meta, autoload_with=self.sql_conn.engine),
+            "TransmitterPDU": sqlalchemy.Table("TransmitterPDU", self.sql_meta, autoload_with=self.sql_conn.engine),
+        }
 
         self.max_buffer_size = max_buffer_size
 
@@ -186,26 +185,29 @@ class LoggerSQLExporter:
 
     def _export_event_report(self, event_report: EventReportInterpreter):
         # print(f"Exported event report: {event_report}")
-        consistent_base_data = {"LoggerFile": [self.logger_file], "ExportTime": [self.export_time],
-                                "ExerciseId": [self.exercise_id]}
+        consistent_base_data = {
+            "LoggerFile": self.logger_file,
+            "ExportTime": self.export_time,
+            "ExerciseId": self.exercise_id
+        }
 
         data_to_insert = event_report.fixed_data | event_report.variable_data | event_report.base_data | \
                          consistent_base_data
 
-        self._batch_dicts(event_report.event_name, data_to_insert)
+        self._batch_dicts(event_report.event_name, [data_to_insert])
 
     def _export_entity_state(self, logger_pdu: LoggerPDU):
         base_data = {
-            "SenderIdSite": [logger_pdu.pdu.entityID.siteID],
-            "SenderIdHost": [logger_pdu.pdu.entityID.applicationID],
-            "SenderIdNum": [logger_pdu.pdu.entityID.entityID],
+            "SenderIdSite": logger_pdu.pdu.entityID.siteID,
+            "SenderIdHost": logger_pdu.pdu.entityID.applicationID,
+            "SenderIdNum": logger_pdu.pdu.entityID.entityID,
 
-            "WorldTime": [datetime.datetime.fromtimestamp(logger_pdu.world_time)],
-            "PacketTime": [logger_pdu.packet_time],
+            "WorldTime": datetime.datetime.fromtimestamp(logger_pdu.world_time),
+            "PacketTime": logger_pdu.packet_time,
 
-            "LoggerFile": [self.logger_file],
-            "ExportTime": [self.export_time],
-            "ExerciseId": [self.exercise_id]
+            "LoggerFile": self.logger_file,
+            "ExportTime": self.export_time,
+            "ExerciseId": self.exercise_id
         }
 
         # Ints
@@ -225,208 +227,218 @@ class LoggerSQLExporter:
         # Damage
         damage = int(entity_appearance[3:5], 2)
         entity_ints_damage = base_data | {
-            "IntType": ["Damage"],
-            "IntValue": [damage]
+            "IntType": "Damage",
+            "IntValue": damage
         }
 
         # Weapon1
         entity_ints_weapon1 = base_data | {
-            "IntType": ["Weapon1"],
-            "IntValue": [logger_pdu.pdu.entityAppearance]
+            "IntType": "Weapon1",
+            "IntValue": logger_pdu.pdu.entityAppearance
         }
 
         # forceId
         entity_ints_forceid = base_data | {
-            "IntType": ["forceId"],
-            "IntValue": [logger_pdu.pdu.forceId]
+            "IntType": "forceId",
+            "IntValue": logger_pdu.pdu.forceId
         }
 
-        overall_dicts = merge_dicts_of_lists(entity_ints_damage, entity_ints_weapon1)
-        overall_dicts = merge_dicts_of_lists(overall_dicts, entity_ints_forceid)
+        # overall_dicts = merge_dicts_of_lists(entity_ints_damage, entity_ints_weapon1)
+        # overall_dicts = merge_dicts_of_lists(overall_dicts, entity_ints_forceid)
+
+        overall_dicts = [entity_ints_damage, entity_ints_weapon1, entity_ints_forceid]
 
         self._batch_dicts("EntityStateInts", overall_dicts)
 
     def _entity_state_locs(self, logger_pdu: LoggerPDU, base_data: dict):
         entity_locs = base_data | {
-            "GeoLocationX": [logger_pdu.pdu.entityLocation.x],
-            "GeoLocationY": [logger_pdu.pdu.entityLocation.y],
-            "GeoLocationZ": [logger_pdu.pdu.entityLocation.z],
+            "GeoLocationX": logger_pdu.pdu.entityLocation.x,
+            "GeoLocationY": logger_pdu.pdu.entityLocation.y,
+            "GeoLocationZ": logger_pdu.pdu.entityLocation.z,
 
-            "GeoVelocityX": [logger_pdu.pdu.entityLinearVelocity.x],
-            "GeoVelocityY": [logger_pdu.pdu.entityLinearVelocity.y],
-            "GeoVelocityZ": [logger_pdu.pdu.entityLinearVelocity.z],
+            "GeoVelocityX": logger_pdu.pdu.entityLinearVelocity.x,
+            "GeoVelocityY": logger_pdu.pdu.entityLinearVelocity.y,
+            "GeoVelocityZ": logger_pdu.pdu.entityLinearVelocity.z,
 
-            "Psi": [logger_pdu.pdu.entityOrientation.psi],
-            "Theta": [logger_pdu.pdu.entityOrientation.theta],
-            "Phi": [logger_pdu.pdu.entityOrientation.phi]
+            "Psi": logger_pdu.pdu.entityOrientation.psi,
+            "Theta": logger_pdu.pdu.entityOrientation.theta,
+            "Phi": logger_pdu.pdu.entityOrientation.phi
         }
 
-        self._batch_dicts("EntityStateLocations", entity_locs)
+        self._batch_dicts("EntityStateLocations", [entity_locs])
 
     def _entity_state_texts(self, logger_pdu: LoggerPDU, base_data: dict):
         # MarkingText
         entity_texts_marking = base_data | {
-            "TextType": ["MarkingText"],
-            "TextValue": ["".join(map(chr, logger_pdu.pdu.marking.characters))]
+            "TextType": "MarkingText",
+            "TextValue": "".join(map(chr, logger_pdu.pdu.marking.characters))
         }
 
         # EntityType
         entity_type = logger_pdu.pdu.entityType
         entity_texts_type = base_data | {
-            "TextType": ["EntityType"],
-            "TextValue": [
-                f"{entity_type.entityKind}:{entity_type.domain}:{entity_type.country}:{entity_type.category}:{entity_type.subcategory}:{entity_type.specific}:{entity_type.extra}"]
+            "TextType": "EntityType",
+            "TextValue": f"{entity_type.entityKind}:{entity_type.domain}:{entity_type.country}:{entity_type.category}:{entity_type.subcategory}:{entity_type.specific}:{entity_type.extra}"
         }
-        overall_dicts = merge_dicts_of_lists(entity_texts_marking, entity_texts_type)
+        # overall_dicts = merge_dicts_of_lists(entity_texts_marking, entity_texts_type)
 
-        self._batch_dicts("EntityStateTexts", overall_dicts)
+        self._batch_dicts("EntityStateTexts", [entity_texts_marking, entity_texts_type])
 
     def _export_fire_pdu(self, logger_pdu: LoggerPDU):
         munition_type = logger_pdu.pdu.descriptor.munitionType
 
         firepdu = {
-            "EventIdSite": [logger_pdu.pdu.eventID.simulationAddress.site],
-            "EventIdHost": [logger_pdu.pdu.eventID.simulationAddress.application],
-            "EventIdNum": [logger_pdu.pdu.eventID.eventNumber],
+            "EventIdSite": logger_pdu.pdu.eventID.simulationAddress.site,
+            "EventIdHost": logger_pdu.pdu.eventID.simulationAddress.application,
+            "EventIdNum": logger_pdu.pdu.eventID.eventNumber,
 
-            "AttackerIdSite": [logger_pdu.pdu.firingEntityID.siteID],
-            "AttackerIdHost": [logger_pdu.pdu.firingEntityID.applicationID],
-            "AttackerIdNum": [logger_pdu.pdu.firingEntityID.entityID],
+            "AttackerIdSite": logger_pdu.pdu.firingEntityID.siteID,
+            "AttackerIdHost": logger_pdu.pdu.firingEntityID.applicationID,
+            "AttackerIdNum": logger_pdu.pdu.firingEntityID.entityID,
 
-            "TargetIdSite": [logger_pdu.pdu.targetEntityID.siteID],
-            "TargetIdHost": [logger_pdu.pdu.targetEntityID.applicationID],
-            "TargetIdNum": [logger_pdu.pdu.targetEntityID.entityID],
+            "TargetIdSite": logger_pdu.pdu.targetEntityID.siteID,
+            "TargetIdHost": logger_pdu.pdu.targetEntityID.applicationID,
+            "TargetIdNum": logger_pdu.pdu.targetEntityID.entityID,
 
-            "MunitionIdSite": [logger_pdu.pdu.munitionExpendibleID.siteID],
-            "MunitionIdHost": [logger_pdu.pdu.munitionExpendibleID.applicationID],
-            "MunitionIdNum": [logger_pdu.pdu.munitionExpendibleID.entityID],
+            "MunitionIdSite": logger_pdu.pdu.munitionExpendibleID.siteID,
+            "MunitionIdHost": logger_pdu.pdu.munitionExpendibleID.applicationID,
+            "MunitionIdNum": logger_pdu.pdu.munitionExpendibleID.entityID,
 
-            "GeoLocationX": [logger_pdu.pdu.locationInWorldCoordinates.x],
-            "GeoLocationY": [logger_pdu.pdu.locationInWorldCoordinates.y],
-            "GeoLocationZ": [logger_pdu.pdu.locationInWorldCoordinates.z],
+            "GeoLocationX": logger_pdu.pdu.locationInWorldCoordinates.x,
+            "GeoLocationY": logger_pdu.pdu.locationInWorldCoordinates.y,
+            "GeoLocationZ": logger_pdu.pdu.locationInWorldCoordinates.z,
 
-            "GeoVelocityX": [logger_pdu.pdu.velocity.x],
-            "GeoVelocityY": [logger_pdu.pdu.velocity.y],
-            "GeoVelocityZ": [logger_pdu.pdu.velocity.z],
+            "GeoVelocityX": logger_pdu.pdu.velocity.x,
+            "GeoVelocityY": logger_pdu.pdu.velocity.y,
+            "GeoVelocityZ": logger_pdu.pdu.velocity.z,
 
-            "MunitionType": [
-                f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}"],
+            "MunitionType": 
+                f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}",
 
-            "FuseType": [logger_pdu.pdu.descriptor.fuse],
-            "Quantity": [logger_pdu.pdu.descriptor.quantity],
-            "Range": [logger_pdu.pdu.range],
-            "WarheadType": [logger_pdu.pdu.descriptor.warhead],
+            "FuseType": logger_pdu.pdu.descriptor.fuse,
+            "Quantity": logger_pdu.pdu.descriptor.quantity,
+            "Range": logger_pdu.pdu.range,
+            "WarheadType": logger_pdu.pdu.descriptor.warhead,
 
-            "WorldTime": [datetime.datetime.fromtimestamp(logger_pdu.world_time)],
-            "PacketTime": [logger_pdu.packet_time],
+            "WorldTime": datetime.datetime.fromtimestamp(logger_pdu.world_time),
+            "PacketTime": logger_pdu.packet_time,
 
-            "LoggerFile": [self.logger_file],
-            "ExportTime": [self.export_time],
-            "ExerciseId": [self.exercise_id]
+            "LoggerFile": self.logger_file,
+            "ExportTime": self.export_time,
+            "ExerciseId": self.exercise_id
         }
 
-        self._batch_dicts("FirePdu", firepdu)
+        self._batch_dicts("FirePdu", [firepdu])
 
     def _export_detonation_pdu(self, logger_pdu: LoggerPDU):
         munition_type = logger_pdu.pdu.descriptor.munitionType
 
         detonation_pdu = {
-            "EventIdSite": [logger_pdu.pdu.eventID.simulationAddress.site],
-            "EventIdHost": [logger_pdu.pdu.eventID.simulationAddress.application],
-            "EventIdNum": [logger_pdu.pdu.eventID.eventNumber],
+            "EventIdSite": logger_pdu.pdu.eventID.simulationAddress.site,
+            "EventIdHost": logger_pdu.pdu.eventID.simulationAddress.application,
+            "EventIdNum": logger_pdu.pdu.eventID.eventNumber,
 
-            "AttackerIdSite": [logger_pdu.pdu.firingEntityID.siteID],
-            "AttackerIdHost": [logger_pdu.pdu.firingEntityID.applicationID],
-            "AttackerIdNum": [logger_pdu.pdu.firingEntityID.entityID],
+            "AttackerIdSite": logger_pdu.pdu.firingEntityID.siteID,
+            "AttackerIdHost": logger_pdu.pdu.firingEntityID.applicationID,
+            "AttackerIdNum": logger_pdu.pdu.firingEntityID.entityID,
 
-            "TargetIdSite": [logger_pdu.pdu.targetEntityID.siteID],
-            "TargetIdHost": [logger_pdu.pdu.targetEntityID.applicationID],
-            "TargetIdNum": [logger_pdu.pdu.targetEntityID.entityID],
+            "TargetIdSite": logger_pdu.pdu.targetEntityID.siteID,
+            "TargetIdHost": logger_pdu.pdu.targetEntityID.applicationID,
+            "TargetIdNum": logger_pdu.pdu.targetEntityID.entityID,
 
-            "MunitionIdSite": [logger_pdu.pdu.explodingEntityID.siteID],
-            "MunitionIdHost": [logger_pdu.pdu.explodingEntityID.applicationID],
-            "MunitionIdNum": [logger_pdu.pdu.explodingEntityID.entityID],
+            "MunitionIdSite": logger_pdu.pdu.explodingEntityID.siteID,
+            "MunitionIdHost": logger_pdu.pdu.explodingEntityID.applicationID,
+            "MunitionIdNum": logger_pdu.pdu.explodingEntityID.entityID,
 
-            "GeoLocationX": [logger_pdu.pdu.locationInWorldCoordinates.x],
-            "GeoLocationY": [logger_pdu.pdu.locationInWorldCoordinates.y],
-            "GeoLocationZ": [logger_pdu.pdu.locationInWorldCoordinates.z],
+            "GeoLocationX": logger_pdu.pdu.locationInWorldCoordinates.x,
+            "GeoLocationY": logger_pdu.pdu.locationInWorldCoordinates.y,
+            "GeoLocationZ": logger_pdu.pdu.locationInWorldCoordinates.z,
 
-            "GeoVelocityX": [logger_pdu.pdu.velocity.x],
-            "GeoVelocityY": [logger_pdu.pdu.velocity.y],
-            "GeoVelocityZ": [logger_pdu.pdu.velocity.z],
+            "GeoVelocityX": logger_pdu.pdu.velocity.x,
+            "GeoVelocityY": logger_pdu.pdu.velocity.y,
+            "GeoVelocityZ": logger_pdu.pdu.velocity.z,
 
-            "MunitionType": [
-                f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}"],
+            "MunitionType": 
+                f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}",
 
-            "FuseType": [logger_pdu.pdu.descriptor.fuse],
-            "Quantity": [logger_pdu.pdu.descriptor.quantity],
-            "WarheadType": [logger_pdu.pdu.descriptor.warhead],
+            "FuseType": logger_pdu.pdu.descriptor.fuse,
+            "Quantity": logger_pdu.pdu.descriptor.quantity,
+            "WarheadType": logger_pdu.pdu.descriptor.warhead,
 
-            "WorldTime": [datetime.datetime.fromtimestamp(logger_pdu.world_time)],
-            "PacketTime": [logger_pdu.packet_time],
+            "WorldTime": datetime.datetime.fromtimestamp(logger_pdu.world_time),
+            "PacketTime": logger_pdu.packet_time,
 
-            "LoggerFile": [self.logger_file],
-            "ExportTime": [self.export_time],
-            "ExerciseId": [self.exercise_id]
+            "LoggerFile": self.logger_file,
+            "ExportTime": self.export_time,
+            "ExerciseId": self.exercise_id
         }
 
-        self._batch_dicts("DetonationPdu", detonation_pdu)
+        self._batch_dicts("DetonationPdu", [detonation_pdu])
 
     def _export_transmitter_pdu(self, logger_pdu: LoggerPDU):
         radio_entity_type = logger_pdu.pdu.radioEntityType
 
         transmitter_pdu = {
-            "RadioID": [logger_pdu.pdu.radioNumber],
+            "RadioID": logger_pdu.pdu.radioNumber,
 
-            "RadioType": [
-                f"{radio_entity_type.entityKind}:{radio_entity_type.domain}:{radio_entity_type.country}:{radio_entity_type.category}:{radio_entity_type.subcategory}:{radio_entity_type.specific}:{radio_entity_type.extra}"],
+            "RadioType": 
+                f"{radio_entity_type.entityKind}:{radio_entity_type.domain}:{radio_entity_type.country}:{radio_entity_type.category}:{radio_entity_type.subcategory}:{radio_entity_type.specific}:{radio_entity_type.extra}",
 
-            "TransmitState": [logger_pdu.pdu.transmitState],
+            "TransmitState": logger_pdu.pdu.transmitState,
 
-            "InputSource": [logger_pdu.pdu.inputSource],
+            "InputSource": logger_pdu.pdu.inputSource,
 
-            "AntennaLocationX": [logger_pdu.pdu.antennaLocation.x],
-            "AntennaLocationY": [logger_pdu.pdu.antennaLocation.y],
-            "AntennaLocationZ": [logger_pdu.pdu.antennaLocation.z],
+            "AntennaLocationX": logger_pdu.pdu.antennaLocation.x,
+            "AntennaLocationY": logger_pdu.pdu.antennaLocation.y,
+            "AntennaLocationZ": logger_pdu.pdu.antennaLocation.z,
 
-            "RelativeAntennaLocationX": [logger_pdu.pdu.relativeAntennaLocation.x],
-            "RelativeAntennaLocationY": [logger_pdu.pdu.relativeAntennaLocation.y],
-            "RelativeAntennaLocationZ": [logger_pdu.pdu.relativeAntennaLocation.z],
+            "RelativeAntennaLocationX": logger_pdu.pdu.relativeAntennaLocation.x,
+            "RelativeAntennaLocationY": logger_pdu.pdu.relativeAntennaLocation.y,
+            "RelativeAntennaLocationZ": logger_pdu.pdu.relativeAntennaLocation.z,
 
-            "AntennaPatternType": [logger_pdu.pdu.antennaPatternType],
+            "AntennaPatternType": logger_pdu.pdu.antennaPatternType,
 
-            "Frequency": [logger_pdu.pdu.frequency],
+            "Frequency": logger_pdu.pdu.frequency,
 
-            "TransmitFrequencyBandwidth": [logger_pdu.pdu.transmitFrequencyBandwidth],
+            "TransmitFrequencyBandwidth": logger_pdu.pdu.transmitFrequencyBandwidth,
 
-            "Power": [logger_pdu.pdu.power],
+            "Power": logger_pdu.pdu.power,
 
-            "SenderIdSite": [logger_pdu.pdu.radioReferenceID.siteID],
-            "SenderIdHost": [logger_pdu.pdu.radioReferenceID.applicationID],
-            "SenderIdNum": [logger_pdu.pdu.radioReferenceID.entityID],
+            "SenderIdSite": logger_pdu.pdu.radioReferenceID.siteID,
+            "SenderIdHost": logger_pdu.pdu.radioReferenceID.applicationID,
+            "SenderIdNum": logger_pdu.pdu.radioReferenceID.entityID,
 
-            "WorldTime": [datetime.datetime.fromtimestamp(logger_pdu.world_time)],
-            "PacketTime": [logger_pdu.packet_time],
+            "WorldTime": datetime.datetime.fromtimestamp(logger_pdu.world_time),
+            "PacketTime": logger_pdu.packet_time,
 
-            "LoggerFile": [self.logger_file],
-            "ExportTime": [self.export_time],
-            "ExerciseId": [self.exercise_id]
+            "LoggerFile": self.logger_file,
+            "ExportTime": self.export_time,
+            "ExerciseId": self.exercise_id
         }
 
+        self._batch_dicts("TransmitterPDU", [transmitter_pdu])
 
-        self._batch_dicts("TransmitterPDU", transmitter_pdu)
-
-    def _batch_dicts(self, table, d: dict):
+    def _batch_dicts(self, table, d: list):
         try:
-            current_table = self.dict_batches[table]
-            self.dict_batches[table] = merge_dicts_of_lists(current_table, d)
+            # current_table = self.dict_batches[table]
+            # self.dict_batches[table] = merge_dicts_of_lists(current_table, d)
+            self.dict_batches[table] += d
         except KeyError:
             self.dict_batches[table] = d
 
-
     def export_batches(self):
-        for table_name in self.dict_batches.copy():
-            t = pd.DataFrame(self.dict_batches.pop(table_name))
+        for table_name in self.dict_batches:
+            try:
+                sub_batches = []
+                while len(self.dict_batches[table_name]) > self.max_buffer_size:
+                    sub_batches.append(self.dict_batches[table_name][:self.max_buffer_size])
+                    self.dict_batches[table_name] = self.dict_batches[table_name][self.max_buffer_size:]
+                # print(f"Inserting {len(self.dict_batches[table_name])} rows into {table_name}")
+                ins = self.sql_tables[table_name].insert().values(self.dict_batches[table_name])
+                self.sql_conn.execute(ins)
+            except KeyError:
+                self.sql_tables[table_name] = sqlalchemy.Table(table_name, self.sql_meta, autoload_with=self.sql_conn.engine)
+
             # print(f"Inserting {len(t)} rows into {table_name}")
             # t.to_sql(table_name, self.sql_conn, schema="dis", if_exists="append", index=False)
 
@@ -444,7 +456,7 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
         raw_data = f.read().split(b"line_separator")
 
         data = []
-        logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db)
+        logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db, max_buffer_size=200)
 
         total = len(raw_data)
         print(f"Start time: {datetime.datetime.now()}")
@@ -453,7 +465,7 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
             if i % 100_000 == 0:
                 print(f"{i:,}")
 
-            if i % 10_000 == 0 and i != 0:
+            if i % 100 == 0 and i != 0:
                 logger_sql_exporter.export_batches()
 
             if line.count(b"line_divider") == 2:
@@ -505,6 +517,6 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
 
 if __name__ == "__main__":
     start_time = time.perf_counter()
-    load_file_data("part_exp.lzma", "GidonLSETest", 97, new_db=True)
+    load_file_data("part_exp.lzma", "GidonLSETest", 97, new_db=False)
     end_time = time.perf_counter()
     print(f"Execution time: {datetime.timedelta(seconds=(end_time - start_time))}")
