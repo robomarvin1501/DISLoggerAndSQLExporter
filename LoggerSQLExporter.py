@@ -5,17 +5,29 @@ import json
 import os
 import struct
 import logging
+import threading
 import time
+import urllib.parse
 
 import sqlalchemy
+from sqlalchemy.orm.session import sessionmaker
 
 import opendis
 
-from ***REMOVED***.Tools import sqlConn
+# from ***REMOVED***.Tools import sqlConn
 
 from opendis.PduFactory import createPdu
 ***REMOVED***
 ***REMOVED***
+
+
+def sql_engine(db: str):
+    ***REMOVED***
+    params = urllib.parse.quote_plus(conn_str)
+    engine = sqlalchemy.create_engine("mssql+pyodbc:///?odbc_connect=%s" % params, pool_size=5_000, max_overflow=0)
+
+    return engine
+
 
 logging.basicConfig(filename="logger_exporter.log", encoding="utf-8", level=logging.DEBUG)
 
@@ -127,10 +139,18 @@ class LoggerSQLExporter:
 
     def __init__(self, logger_file: str, export_db: str, exercise_id: int, new_db: bool = False,
                  max_buffer_size: int = 400):
+        if new_db:
+            # Creates the Event Report tables when it's a new db. Can be run every time, but unnecessary
+            ***REMOVED***()
+            ***REMOVED***(export_db)
+
         self.pdu_encoder = None
 
-        self.sql_conn = sqlConn(export_db)
+        # self.sql_conn = sqlConn(export_db)
+        self.sql_engine = sql_engine(export_db)
         self.sql_meta = sqlalchemy.MetaData(schema="dis")
+        # self.Session = sessionmaker(bind=self.sql_conn.engine)
+        # self.session = self.Session()
 
         self.logger_file = logger_file
         self.export_time = datetime.datetime.now()
@@ -138,14 +158,14 @@ class LoggerSQLExporter:
 
         self.dict_batches = {}
 
-        self.sql_tables = {
-            "EntityStateInts": sqlalchemy.Table("EntityStateInts", self.sql_meta, autoload_with=self.sql_conn.engine),
+        self.sql_tables: dict[str, sqlalchemy.Table] = {
+            "EntityStateInts": sqlalchemy.Table("EntityStateInts", self.sql_meta, autoload_with=self.sql_engine),
             "EntityStateLocations": sqlalchemy.Table("EntityStateLocations", self.sql_meta,
-                                                     autoload_with=self.sql_conn.engine),
-            "EntityStateTexts": sqlalchemy.Table("EntityStateTexts", self.sql_meta, autoload_with=self.sql_conn.engine),
-            "FirePdu": sqlalchemy.Table("FirePdu", self.sql_meta, autoload_with=self.sql_conn.engine),
-            "DetonationPdu": sqlalchemy.Table("DetonationPdu", self.sql_meta, autoload_with=self.sql_conn.engine),
-            "TransmitterPDU": sqlalchemy.Table("TransmitterPDU", self.sql_meta, autoload_with=self.sql_conn.engine),
+                                                     autoload_with=self.sql_engine),
+            "EntityStateTexts": sqlalchemy.Table("EntityStateTexts", self.sql_meta, autoload_with=self.sql_engine),
+            "FirePdu": sqlalchemy.Table("FirePdu", self.sql_meta, autoload_with=self.sql_engine),
+            "DetonationPdu": sqlalchemy.Table("DetonationPdu", self.sql_meta, autoload_with=self.sql_engine),
+            "TransmitterPDU": sqlalchemy.Table("TransmitterPDU", self.sql_meta, autoload_with=self.sql_engine),
         }
 
         self.max_buffer_size = max_buffer_size
@@ -153,11 +173,6 @@ class LoggerSQLExporter:
         self.entity_state_buffer = []
 
         self.read_encoder()
-
-        if new_db:
-            # Creates the Event Report tables when it's a new db. Can be run every time, but unnecessary
-            ***REMOVED***()
-            ***REMOVED***(export_db)
 
     def export(self, logger_pdu: LoggerPDU):
         pdu_type = type(logger_pdu.pdu)
@@ -312,7 +327,7 @@ class LoggerSQLExporter:
             "GeoVelocityY": logger_pdu.pdu.velocity.y,
             "GeoVelocityZ": logger_pdu.pdu.velocity.z,
 
-            "MunitionType": 
+            "MunitionType":
                 f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}",
 
             "FuseType": logger_pdu.pdu.descriptor.fuse,
@@ -358,7 +373,7 @@ class LoggerSQLExporter:
             "GeoVelocityY": logger_pdu.pdu.velocity.y,
             "GeoVelocityZ": logger_pdu.pdu.velocity.z,
 
-            "MunitionType": 
+            "MunitionType":
                 f"{munition_type.entityKind}:{munition_type.domain}:{munition_type.country}:{munition_type.category}:{munition_type.subcategory}:{munition_type.specific}:{munition_type.extra}",
 
             "FuseType": logger_pdu.pdu.descriptor.fuse,
@@ -381,7 +396,7 @@ class LoggerSQLExporter:
         transmitter_pdu = {
             "RadioID": logger_pdu.pdu.radioNumber,
 
-            "RadioType": 
+            "RadioType":
                 f"{radio_entity_type.entityKind}:{radio_entity_type.domain}:{radio_entity_type.country}:{radio_entity_type.category}:{radio_entity_type.subcategory}:{radio_entity_type.specific}:{radio_entity_type.extra}",
 
             "TransmitState": logger_pdu.pdu.transmitState,
@@ -426,23 +441,29 @@ class LoggerSQLExporter:
         except KeyError:
             self.dict_batches[table] = d
 
-    def export_batches(self):
+    def export_batches(self, *args):
         for table_name in self.dict_batches:
             try:
-                sub_batches = []
-                while len(self.dict_batches[table_name]) > self.max_buffer_size:
-                    sub_batches.append(self.dict_batches[table_name][:self.max_buffer_size])
-                    self.dict_batches[table_name] = self.dict_batches[table_name][self.max_buffer_size:]
-                # print(f"Inserting {len(self.dict_batches[table_name])} rows into {table_name}")
-                ins = self.sql_tables[table_name].insert().values(self.dict_batches[table_name])
-                self.sql_conn.execute(ins)
-            except KeyError:
-                self.sql_tables[table_name] = sqlalchemy.Table(table_name, self.sql_meta, autoload_with=self.sql_conn.engine)
+                threading.Thread(target=self._thread_export,
+                                 args=(self.sql_tables[table_name], self.dict_batches[table_name], args),
+                                 daemon=True).start()
 
+            except KeyError:
+                # print("Export error")
+                self.sql_tables[table_name] = sqlalchemy.Table(table_name, self.sql_meta,
+                                                               autoload_with=self.sql_engine)
+                threading.Thread(target=self._thread_export,
+                                 args=(self.sql_tables[table_name], self.dict_batches[table_name], args),
+                                 daemon=True).start()
             # print(f"Inserting {len(t)} rows into {table_name}")
-            # t.to_sql(table_name, self.sql_conn, schema="dis", if_exists="append", index=False)
 
         self.dict_batches = {}
+
+    def _thread_export(self, table: sqlalchemy.Table, data: list[dict], *args):
+        with self.sql_engine.begin() as connection:
+            connection.execute(table.insert(), data)
+
+        # print(args)
 
 
 def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=False, debug=False):
@@ -456,7 +477,7 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
         raw_data = f.read().split(b"line_separator")
 
         data = []
-        logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db, max_buffer_size=200)
+        logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db, max_buffer_size=400)
 
         total = len(raw_data)
         print(f"Start time: {datetime.datetime.now()}")
@@ -465,17 +486,18 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
             if i % 100_000 == 0:
                 print(f"{i:,}")
 
-            if i % 100 == 0 and i != 0:
-                logger_sql_exporter.export_batches()
+            if i % 10_000 == 0 and i != 0:
+                print(f"{i:,}")
+                logger_sql_exporter.export_batches(i)
+                # print(logger_sql_exporter.sql_conn.)
 
             if line.count(b"line_divider") == 2:
                 try:
                     # ent_state_start = time.perf_counter()
                     logger_pdu = LoggerPDU(line)
 
-                    data.append(logger_pdu)
+                    # data.append(logger_pdu)
 
-                    # threading.Thread(target=logger_sql_exporter.export, args=(logger_pdu,), daemon=True).start()
                     logger_sql_exporter.export(logger_pdu)
                     # print(f"Export {type(logger_pdu.pdu)}: {time.perf_counter() - ent_state_start}")
                     # logging.info(f"{type(logger_pdu.pdu)} : {time.perf_counter() - ent_state_start}")
@@ -504,8 +526,6 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
                     separator_errors += 1
                 continue
 
-        # data = [LoggerPDU(logger_line) for logger_line in raw_data]
-        # l_pdus = convert_to_pdus(data)
         print("Loaded file")
     if debug:
         logging.info(f"Total pdus:              {total}")
