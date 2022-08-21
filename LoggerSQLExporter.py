@@ -10,7 +10,6 @@ import time
 import urllib.parse
 
 import sqlalchemy
-from sqlalchemy.orm.session import sessionmaker
 
 import opendis
 
@@ -32,8 +31,38 @@ def sql_engine(db: str):
 logging.basicConfig(filename="logger_exporter.log", encoding="utf-8", level=logging.DEBUG)
 
 
-def merge_dicts_of_lists(a: dict, b: dict):
-    return {key: a.get(key, []) + b.get(key, []) for key in (a.keys() | b.keys())}
+class Exporter:
+    def __init__(self, table_name: str, sql_meta: sqlalchemy.MetaData, sql_engine: sqlalchemy.engine):
+        self.table_name = table_name
+        self.table = sqlalchemy.Table(table_name, sql_meta, autoload_with=sql_engine)
+        self.sql_engine = sql_engine
+
+        self.data = []
+
+        self.lock = threading.Lock()
+        threading.Thread(target=self.export, args=()).start()
+
+    def add_data(self, data_to_add: list):
+        self.data += data_to_add
+
+    def export(self):
+        if len(self.data) == 0:
+            threading.Timer(1, self.export).start()
+            # print(f"No data in {self.table_name}")
+        else:
+            uid = hash(datetime.datetime.now())
+            with self.sql_engine.begin() as connection:
+                with self.lock:
+                    if "EntityState" in self.table_name:
+                        print(f"Exporting: {self.table_name}, pid={uid}")
+                    connection.execute(self.table.insert(), self.data)
+                    if "EntityState" in self.table_name:
+                        print(f"Done: {self.table_name}, pid={uid}")
+                    self.data = []
+
+            threading.Thread(target=self.export, args=(), daemon=True).start()
+
+
 
 
 class LoggerPDU:
@@ -146,17 +175,12 @@ class LoggerSQLExporter:
 
         self.pdu_encoder = None
 
-        # self.sql_conn = sqlConn(export_db)
         self.sql_engine = sql_engine(export_db)
         self.sql_meta = sqlalchemy.MetaData(schema="dis")
-        # self.Session = sessionmaker(bind=self.sql_conn.engine)
-        # self.session = self.Session()
 
         self.logger_file = logger_file
         self.export_time = datetime.datetime.now()
         self.exercise_id = exercise_id
-
-        self.dict_batches = {}
 
         self.sql_tables: dict[str, sqlalchemy.Table] = {
             "EntityStateInts": sqlalchemy.Table("EntityStateInts", self.sql_meta, autoload_with=self.sql_engine),
@@ -167,6 +191,8 @@ class LoggerSQLExporter:
             "DetonationPdu": sqlalchemy.Table("DetonationPdu", self.sql_meta, autoload_with=self.sql_engine),
             "TransmitterPDU": sqlalchemy.Table("TransmitterPDU", self.sql_meta, autoload_with=self.sql_engine),
         }
+
+        self.exporters = {name: Exporter(name, self.sql_meta, self.sql_engine) for name in self.sql_tables.keys()}
 
         self.max_buffer_size = max_buffer_size
 
@@ -258,9 +284,6 @@ class LoggerSQLExporter:
             "IntValue": logger_pdu.pdu.forceId
         }
 
-        # overall_dicts = merge_dicts_of_lists(entity_ints_damage, entity_ints_weapon1)
-        # overall_dicts = merge_dicts_of_lists(overall_dicts, entity_ints_forceid)
-
         overall_dicts = [entity_ints_damage, entity_ints_weapon1, entity_ints_forceid]
 
         self._batch_dicts("EntityStateInts", overall_dicts)
@@ -295,7 +318,6 @@ class LoggerSQLExporter:
             "TextType": "EntityType",
             "TextValue": f"{entity_type.entityKind}:{entity_type.domain}:{entity_type.country}:{entity_type.category}:{entity_type.subcategory}:{entity_type.specific}:{entity_type.extra}"
         }
-        # overall_dicts = merge_dicts_of_lists(entity_texts_marking, entity_texts_type)
 
         self._batch_dicts("EntityStateTexts", [entity_texts_marking, entity_texts_type])
 
@@ -435,35 +457,16 @@ class LoggerSQLExporter:
 
     def _batch_dicts(self, table, d: list):
         try:
-            # current_table = self.dict_batches[table]
-            # self.dict_batches[table] = merge_dicts_of_lists(current_table, d)
-            self.dict_batches[table] += d
+            self.exporters[table].add_data(d)
         except KeyError:
-            self.dict_batches[table] = d
+            self.exporters[table] = Exporter(table, self.sql_meta, self.sql_engine)
+            self.exporters[table].add_data(d)
 
-    def export_batches(self, *args):
-        for table_name in self.dict_batches:
-            try:
-                threading.Thread(target=self._thread_export,
-                                 args=(self.sql_tables[table_name], self.dict_batches[table_name], args),
-                                 daemon=True).start()
-
-            except KeyError:
-                # print("Export error")
-                self.sql_tables[table_name] = sqlalchemy.Table(table_name, self.sql_meta,
-                                                               autoload_with=self.sql_engine)
-                threading.Thread(target=self._thread_export,
-                                 args=(self.sql_tables[table_name], self.dict_batches[table_name], args),
-                                 daemon=True).start()
-            # print(f"Inserting {len(t)} rows into {table_name}")
-
-        self.dict_batches = {}
 
     def _thread_export(self, table: sqlalchemy.Table, data: list[dict], *args):
         with self.sql_engine.begin() as connection:
             connection.execute(table.insert(), data)
 
-        # print(args)
 
 
 def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=False, debug=False):
@@ -486,21 +489,13 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
             if i % 100_000 == 0:
                 print(f"{i:,}")
 
-            if i % 10_000 == 0 and i != 0:
-                print(f"{i:,}")
-                logger_sql_exporter.export_batches(i)
-                # print(logger_sql_exporter.sql_conn.)
-
             if line.count(b"line_divider") == 2:
                 try:
-                    # ent_state_start = time.perf_counter()
                     logger_pdu = LoggerPDU(line)
 
                     # data.append(logger_pdu)
 
                     logger_sql_exporter.export(logger_pdu)
-                    # print(f"Export {type(logger_pdu.pdu)}: {time.perf_counter() - ent_state_start}")
-                    # logging.info(f"{type(logger_pdu.pdu)} : {time.perf_counter() - ent_state_start}")
 
 
                 except ValueError:
@@ -537,6 +532,6 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
 
 if __name__ == "__main__":
     start_time = time.perf_counter()
-    load_file_data("part_exp.lzma", "GidonLSETest", 97, new_db=False)
+    load_file_data("exp_0_1807_3.lzma", "GidonLSETest", 97, new_db=True)
     end_time = time.perf_counter()
     print(f"Execution time: {datetime.timedelta(seconds=(end_time - start_time))}")

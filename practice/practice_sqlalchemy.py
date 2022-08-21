@@ -2,21 +2,27 @@ import sqlalchemy
 import urllib.parse
 import datetime
 
+from collections import namedtuple
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from ***REMOVED***.Tools import sqlConn
+
+def sql_engine(db: str):
+    ***REMOVED***
+    params = urllib.parse.quote_plus(conn_str)
+    engine = sqlalchemy.create_engine("mssql+pyodbc:///?odbc_connect=%s" % params, pool_size=5_000, max_overflow=0)
+
+    return engine
+
+
 
 db = "GidonLSETest"
 
-# ***REMOVED***
-# params = urllib.parse.quote_plus(conn_str)
+sql_engine = sql_engine(db)
+sql_meta = sqlalchemy.MetaData(schema="dis")
+session_factory = sessionmaker(bind=sql_engine)
+Session = scoped_session(session_factory)
 
-# engine = sqlalchemy.create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
-conn = sqlConn(db)
-meta = sqlalchemy.MetaData(schema="dis")
-
-play_stop = sqlalchemy.Table("PlayStopScenario", meta, autoload_with=conn.engine)
-
+# play_stop = sqlalchemy.Table("PlayStopScenario", sql_meta, autoload_with=sql_engine)
 
 a = [
     {
@@ -52,22 +58,17 @@ a = [
     }
 ]
 
-b = {"action": [1, 0], "ScenarioName": ["TestInsertion", "TestInsertion"],
-     "dateTime": [datetime.datetime.fromisoformat("2022-02-09 10:53:05.000"),
-                  datetime.datetime.fromisoformat("2022-02-09 10:53:10.000")], "SenderIdSite": [1, 1],
-     "SenderIdHost": [2, 2], "SenderIdNum": [3, 3], "ReceiverIdSite": [0, 0], "ReceiverIdHost": [0, 0],
-     "ReceiverIdNum": [0, 0],
-     "WorldTime": [datetime.datetime.fromisoformat("2022-02-09 10:53:05.000"),
-                   datetime.datetime.fromisoformat("2022-02-09 10:53:10.000")], "PacketTime": [0.211234, 0.211234],
-     "LoggerFile": ["TestLogger.lgr", "TestLogger.lgr"],
-     "ExportTime": [datetime.datetime.fromisoformat("2022-02-09 10:53:15.000"),
-                    datetime.datetime.fromisoformat("2022-02-09 10:53:15.000")], "ExerciseId": [97, 97]}
+play_stop = namedtuple("PlayStop", a[0].keys())
 
-ins = play_stop.insert().values(a)
-
-
-print(ins)
-conn.execute(ins)
+with Session() as session, session.begin():
+    to_insert = [object(**x) for x in a]
+    try:
+        session.add_all(to_insert)
+    except:
+        session.rollback()
+        raise
+    else:
+        session.commit()
 
 # session_factory = sessionmaker(bind=engine)
 # Session = scoped_session(session_factory)
