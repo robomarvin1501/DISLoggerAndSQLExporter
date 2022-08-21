@@ -13,8 +13,6 @@ import sqlalchemy
 
 import opendis
 
-# from ***REMOVED***.Tools import sqlConn
-
 from opendis.PduFactory import createPdu
 ***REMOVED***
 ***REMOVED***
@@ -46,23 +44,27 @@ class Exporter:
         self.data += data_to_add
 
     def export(self):
+        # base_tables = ["EntityStateInts", "EntityStateLocations", "EntityStateTexts", "FirePdu", "DetonationPdu", "TransmitterPDU"]
+        base_tables = ["EntityStateInts", "EntityStateLocations", "EntityStateTexts"]
         if len(self.data) == 0:
-            threading.Timer(1, self.export).start()
-            # print(f"No data in {self.table_name}")
+            if self.table_name in base_tables:
+                print(f"No data in {self.table_name}")
+
+            if threading.main_thread().is_alive():
+                threading.Timer(1, self.export).start()
+
         else:
-            uid = hash(datetime.datetime.now())
             with self.sql_engine.begin() as connection:
                 with self.lock:
-                    if "EntityState" in self.table_name:
+                    if self.table_name in base_tables:
+                        uid = hash(datetime.datetime.now())
                         print(f"Exporting: {self.table_name}, pid={uid}")
                     connection.execute(self.table.insert(), self.data)
-                    if "EntityState" in self.table_name:
+                    if self.table_name in base_tables:
                         print(f"Done: {self.table_name}, pid={uid}")
                     self.data = []
 
             threading.Thread(target=self.export, args=(), daemon=True).start()
-
-
 
 
 class LoggerPDU:
@@ -462,11 +464,9 @@ class LoggerSQLExporter:
             self.exporters[table] = Exporter(table, self.sql_meta, self.sql_engine)
             self.exporters[table].add_data(d)
 
-
     def _thread_export(self, table: sqlalchemy.Table, data: list[dict], *args):
         with self.sql_engine.begin() as connection:
             connection.execute(table.insert(), data)
-
 
 
 def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=False, debug=False):
@@ -496,7 +496,6 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
                     # data.append(logger_pdu)
 
                     logger_sql_exporter.export(logger_pdu)
-
 
                 except ValueError:
                     if debug:
