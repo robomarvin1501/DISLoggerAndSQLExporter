@@ -205,6 +205,8 @@ class LoggerSQLExporter:
     def export(self, logger_pdu: LoggerPDU):
         pdu_type = type(logger_pdu.pdu)
         if pdu_type == opendis.dis7.EventReportPdu:
+            if str(logger_pdu.pdu.eventType) not in self.pdu_encoder:
+                return
             event_report = EventReportInterpreter(logger_pdu, self.pdu_encoder)
             self._export_event_report(event_report)
         else:
@@ -531,6 +533,6 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
 
 if __name__ == "__main__":
     start_time = time.perf_counter()
-    load_file_data("exp_0_1807_3.lzma", "GidonLSETest", 97, new_db=True)
+    load_file_data("live_export_test.lzma", "GidonLSETest", 97, new_db=True)
     end_time = time.perf_counter()
     print(f"Execution time: {datetime.timedelta(seconds=(end_time - start_time))}")

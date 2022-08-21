@@ -5,7 +5,7 @@ import sys
 import datetime
 
 from opendis.PduFactory import createPdu
-from LoggerSQLExporter import LoggerSQLExporter
+from LoggerSQLExporter import LoggerSQLExporter, LoggerPDU
 
 
 class DISReceiver:
@@ -105,22 +105,32 @@ class DataWriter:
             )
         )
 
+    def write_export(self, pdu_data, packettime: float, worldtime: float):
+        bytes_packettime = struct.pack("d", packettime)
+        bytes_worldtime = struct.pack("d", worldtime)
+
+        return pdu_data + self.line_divider + bytes_packettime + self.line_divider + bytes_worldtime
+
 
 lzc = lzma.LZMACompressor()
 
 EXERCISE_ID = 97
-export = False  # TODO move to config file
-logger_file = "part_exp.lzma"  # TODO move to config file
-
+export = True  # TODO move to config file
+logger_file = "live_export_test.lzma"  # TODO move to config file
+db_name = "GidonLSETest"
 
 if export:
-    LSE = LoggerSQLExporter(logger_file)
+    LSE = LoggerSQLExporter(logger_file, db_name, EXERCISE_ID)
 
     with DataWriter(logger_file, "logs", lzc) as writer:
         with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
             for (address, data, packettime, world_timestamp) in r:
                 # print(f"Got packet from {address}: {data}")
-                LSE.buffer_bytes(data)
+                LSE.export(
+                    LoggerPDU(
+                        writer.write_export(data, packettime, world_timestamp)
+                    )
+                )
                 # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
                 writer.write(data, packettime, world_timestamp)
 
