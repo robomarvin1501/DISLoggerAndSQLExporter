@@ -3,6 +3,7 @@ import lzma
 
 import json
 import os
+import sys
 import struct
 import logging
 import threading
@@ -532,7 +533,26 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
 
 
 if __name__ == "__main__":
+    try:
+        with open("DataExporterConfig.json", 'r') as f:
+            config_data = json.load(f)
+    except FileNotFoundError:
+        print(r"""
+            ERROR: No configuration file
+            Please write a configuration file in the base folder by the name "DataExporterConfig.json"
+            For examples, see \\files\docs\DataExporter\DataExporterConfig.json
+        """)
+        sys.exit()
+
+    if config_data["logger_file"][-5:] != ".lzma":
+        config_data["logger_file"] += ".lzma"
+
+    exercise_id = config_data["exercise_id"]
+    logger_file = config_data["logger_file"]
+    db_name = config_data["database_name"]
+    new_db = config_data["new_database"]
+
     start_time = time.perf_counter()
-    load_file_data("live_export_test.lzma", "GidonLSETest", 97, new_db=True)
+    load_file_data(logger_file, db_name, exercise_id, new_db=new_db)
     end_time = time.perf_counter()
     print(f"Execution time: {datetime.timedelta(seconds=(end_time - start_time))}")

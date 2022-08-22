@@ -5,3 +5,4 @@ __pycache__/
 /mak_logs/
 /encoders/
 /***REMOVED***/config.py
+/DataExporterConfig.json

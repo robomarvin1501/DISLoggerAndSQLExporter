@@ -1,3 +1,4 @@
+import json
 import lzma
 import socket
 import struct
@@ -116,44 +117,60 @@ class DataWriter:
         return pdu_data + self.line_divider + bytes_packettime + self.line_divider + bytes_worldtime
 
 
-lzc = lzma.LZMACompressor()
+if __name__ == "__main__":
+    try:
+        with open("DataExporterConfig.json", 'r') as f:
+            config_data = json.load(f)
+    except FileNotFoundError:
+        print(r"""
+            ERROR: No configuration file
+            Please write a configuration file in the base folder by the name "DataExporterConfig.json"
+            For examples, see \\files\docs\DataExporter\DataExporterConfig.json
+        """)
+        sys.exit()
 
-EXERCISE_ID = 97
-export = True  # TODO move to config file
-logger_file = "live_export_test.lzma"  # TODO move to config file
-db_name = "GidonLSETest"
+    if config_data["logger_file"][-5:] != ".lzma":
+        config_data["logger_file"] += ".lzma"
 
-if export:
-    LSE = LoggerSQLExporter(logger_file, db_name, EXERCISE_ID)
+    lzc = lzma.LZMACompressor()
 
-    with DataWriter(logger_file, "logs", lzc) as writer:
-        with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
-            for (address, data, packettime, world_timestamp) in r:
-                # print(f"Got packet from {address}: {data}")
-                try:
-                    LSE.export(
-                        LoggerPDU(
-                            writer.write_export(data, packettime, world_timestamp)
+    EXERCISE_ID = config_data["exercise_id"]
+    export = config_data["export_to_sql"]
+    logger_file = config_data["logger_file"]
+    db_name = config_data["database_name"]
+    new_db = config_data["new_database"]
+
+    if export:
+        LSE = LoggerSQLExporter(logger_file, db_name, EXERCISE_ID, new_db=new_db)
+
+        with DataWriter(logger_file, "logs", lzc) as writer:
+            with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+                for (address, data, packettime, world_timestamp) in r:
+                    # print(f"Got packet from {address}: {data}")
+                    try:
+                        LSE.export(
+                            LoggerPDU(
+                                writer.write_export(data, packettime, world_timestamp)
+                            )
                         )
-                    )
-                except ValueError as e:
-                    logging.warning(f"ValueError: {e}")
-                except BytesWarning as e:
-                    logging.warning(f"BytesWarning: {e}")
-                except struct.error as e:
-                    logging.warning(f"struct error: {e}")
+                    except ValueError as e:
+                        logging.warning(f"ValueError: {e}")
+                    except BytesWarning as e:
+                        logging.warning(f"BytesWarning: {e}")
+                    except struct.error as e:
+                        logging.warning(f"struct error: {e}")
 
-                # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
-                writer.write(data, packettime, world_timestamp)
+                    # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
+                    writer.write(data, packettime, world_timestamp)
 
 
-else:
-    with DataWriter(logger_file, "logs", lzc) as writer:
-        with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
-            for (address, data, packettime, world_timestamp) in r:
-                print(f"Got packet from {address}: {data}")
-                # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
-                writer.write(data, packettime, world_timestamp)
+    else:
+        with DataWriter(logger_file, "logs", lzc) as writer:
+            with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+                for (address, data, packettime, world_timestamp) in r:
+                    print(f"Got packet from {address}: {data}")
+                    # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
+                    writer.write(data, packettime, world_timestamp)
 
-# receiver_thread.join()
-print("Program ended")
+    # receiver_thread.join()
+    print("Program ended")
