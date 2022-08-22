@@ -7,6 +7,10 @@ import datetime
 from opendis.PduFactory import createPdu
 from LoggerSQLExporter import LoggerSQLExporter, LoggerPDU
 
+import logging
+
+logging.basicConfig(filename="dis-logger.log", encoding="utf-8", level=logging.DEBUG)
+
 
 class DISReceiver:
     def __init__(self, port: int, exercise_id: int, msg_len: int = 8192, timeout: int = 15):
@@ -126,11 +130,19 @@ if export:
         with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
             for (address, data, packettime, world_timestamp) in r:
                 # print(f"Got packet from {address}: {data}")
-                LSE.export(
-                    LoggerPDU(
-                        writer.write_export(data, packettime, world_timestamp)
+                try:
+                    LSE.export(
+                        LoggerPDU(
+                            writer.write_export(data, packettime, world_timestamp)
+                        )
                     )
-                )
+                except ValueError as e:
+                    logging.warning(f"ValueError: {e}")
+                except BytesWarning as e:
+                    logging.warning(f"BytesWarning: {e}")
+                except struct.error as e:
+                    logging.warning(f"struct error: {e}")
+
                 # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
                 writer.write(data, packettime, world_timestamp)
 
