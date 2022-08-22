@@ -6,3 +6,5 @@ __pycache__/
 /encoders/
 /***REMOVED***/config.py
 /DataExporterConfig.json
+/dist/
+/build/

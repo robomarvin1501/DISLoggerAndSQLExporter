@@ -174,3 +174,4 @@ if __name__ == "__main__":
 
     # receiver_thread.join()
     print("Program ended")
+    input("Press any key to continue: ")

@@ -556,3 +556,4 @@ if __name__ == "__main__":
     load_file_data(logger_file, db_name, exercise_id, new_db=new_db)
     end_time = time.perf_counter()
     print(f"Execution time: {datetime.timedelta(seconds=(end_time - start_time))}")
+    input("Press any key to continue: ")
