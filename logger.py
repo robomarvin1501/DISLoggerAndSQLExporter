@@ -164,7 +164,6 @@ if __name__ == "__main__":
                     # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
                     writer.write(data, packettime, world_timestamp)
 
-
     else:
         with DataWriter(logger_file, "logs", lzc) as writer:
             with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
