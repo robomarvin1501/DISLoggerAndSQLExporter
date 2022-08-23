@@ -238,9 +238,11 @@ class LoggerSQLExporter:
                 "LoggerFile": self.logger_file,
                 "ExportTime": self.export_time,
                 "ExerciseId": self.exercise_id,
-                "ExporterMarkingText": self.exporter_marking_text[event_report.logger_pdu.pdu.originatingEntityID]
+                "ExporterMarkingText": self.exporter_marking_text[
+                    event_report.logger_pdu.pdu.originatingEntityID.__str__()]
             }
         except KeyError:
+            logging.warning(f"{event_report.logger_pdu.pdu.originatingEntityID.__str__()} Does not exist in the marking text dict")
             consistent_base_data = {
                 "LoggerFile": self.logger_file,
                 "ExportTime": self.export_time,
