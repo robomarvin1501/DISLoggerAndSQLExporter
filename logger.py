@@ -15,6 +15,17 @@ logging.info("This file is generated in case of things going wrong. Aside from t
 
 
 class DISReceiver:
+    """
+    This class receives DIS messages through the network.
+    It should be used as an iterable, that returns 4 items:
+        addr, data, packettime, and world_timestamp
+
+    addr: str               :   The ip address of the sender of this DIS message
+    data: bytes             :   The received bytes from the network
+    packettime: float       :   The time of the packet since the recording started
+    world_timestamp: float  :   Number of seconds since 1970.01.01 (unix timestamp)
+    """
+
     def __init__(self, port: int, exercise_id: int, msg_len: int = 8192, timeout: int = 15):
         """
         :param port: int : port on which dis is transmitted (usually 3000)
@@ -37,15 +48,23 @@ class DISReceiver:
         return self
 
     def __next__(self):
+        """
+        Builds the iterator of received pdu data
+        Ensures that you shouldn't miss any pdus, even if you spend a long time processing one
+        :return:
+        """
         try:
             received_exercise_id = -1
             data, addr = "", ""
             world_timestamp = 0
+            # Keep looping until a pdu with the correct ExerciseID is received
             while received_exercise_id != self.exercise_id:
                 try:
                     data, addr = self.sock.recvfrom(self.msg_len)
                     world_timestamp = datetime.datetime.now().timestamp()
                 except WindowsError as e:
+                    # Occurs when attempting to receive a pdu that is too large.
+                    # This will be left as an error that causes an exit, any such PDUs should be caught in integrations
                     print(f"Windows error, socket size? {e}")
                     sys.exit()
                 try:
@@ -65,6 +84,7 @@ class DISReceiver:
             raise StopIteration
 
     def __del__(self):
+        # Ensures that the socket is closed when deleting the object
         print("Socket deleted")
         self.sock.close()
 
@@ -72,17 +92,32 @@ class DISReceiver:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Ensures that the socket is closed when deleting the object
         print("Socket exited")
         self.sock.close()
 
 
 class DataWriter:
-    def __init__(self, output_file_name, logger_dir, lzma_compressor):
+    """
+    This class writes compressed DIS PDUs to the chosen loggerfile.
+    It is used with the `with` statement, to ensure the files are properly opened and closed
+    """
+
+    def __init__(self, output_file_name: str, logger_dir: str, lzma_compressor: lzma.LZMACompressor):
+        """
+        :param output_file_name: str : name of the output file
+        :param logger_dir: str : relative path from current directory to log storage
+        :param lzma_compressor: lzma.LZMAConpressor : The compressor for the file
+        """
         self.output_file_name = output_file_name
         self.logger_dir = logger_dir
         self.lzc = lzma_compressor
 
+        # These dividers are given slightly odd names. This is to ensure that they will not appear within a PDU
+        # and confuse things due to a PDU being split in the middle
+        # Divider between data on a single line
         self.line_divider = b"line_divider"
+        # Divider between lines of data
         self.line_separator = b"line_separator"
 
         self.output_file = None
@@ -91,17 +126,19 @@ class DataWriter:
         self.output_file = open(f"{self.logger_dir}/{self.output_file_name}", 'ab')
         return self
 
-    # def __del__(self):
-    #     print("Writer deleted")
-    #     self.output_file.write(self.lzc.flush())
-    #     self.output_file.close()
-
     def __exit__(self, exc_type, exc_val, exc_tb):
         print(f"Writer closed {exc_type} : {exc_val} : {exc_tb}")
         self.output_file.write(self.lzc.flush())
         self.output_file.close()
 
-    def write(self, pdu_data, packettime: float, worldtime: float):
+    def write(self, pdu_data: bytes, packettime: float, worldtime: float):
+        """
+        This method compresses, and writes the provided PDU, and additional data to the logger file.
+        :param pdu_data: bytes
+        :param packettime: float
+        :param worldtime: float
+        :return: None
+        """
         bytes_packettime = struct.pack("d", packettime)
         bytes_worldtime = struct.pack("d", worldtime)
         self.output_file.write(
@@ -111,7 +148,15 @@ class DataWriter:
             )
         )
 
-    def write_export(self, pdu_data, packettime: float, worldtime: float):
+    def write_export(self, pdu_data: bytes, packettime: float, worldtime: float):
+        """
+        This method provides the PDU, and additional data in the format as it would be in the logger file.
+        This is useful when exporting in real time, since the exporter expects the received data to be of that format.
+        :param pdu_data: bytes
+        :param packettime: float
+        :param worldtime: float
+        :return: bytes
+        """
         bytes_packettime = struct.pack("d", packettime)
         bytes_worldtime = struct.pack("d", worldtime)
 
