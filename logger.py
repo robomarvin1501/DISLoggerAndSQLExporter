@@ -11,6 +11,7 @@ from LoggerSQLExporter import LoggerSQLExporter, LoggerPDU
 import logging
 
 logging.basicConfig(filename="dis-logger.log", encoding="utf-8", level=logging.DEBUG)
+logging.info("This file is generated in case of things going wrong. Aside from this message, I hope it to be empty.")
 
 
 class DISReceiver:
