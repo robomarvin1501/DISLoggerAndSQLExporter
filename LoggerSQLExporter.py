@@ -195,6 +195,8 @@ class LoggerSQLExporter:
             "TransmitterPDU": sqlalchemy.Table("TransmitterPDU", self.sql_meta, autoload_with=self.sql_engine),
         }
 
+        self.exporter_marking_text = {}
+
         self.exporters = {name: Exporter(name, self.sql_meta, self.sql_engine) for name in self.sql_tables.keys()}
 
         self.max_buffer_size = max_buffer_size
@@ -231,11 +233,19 @@ class LoggerSQLExporter:
 
     def _export_event_report(self, event_report: EventReportInterpreter):
         # print(f"Exported event report: {event_report}")
-        consistent_base_data = {
-            "LoggerFile": self.logger_file,
-            "ExportTime": self.export_time,
-            "ExerciseId": self.exercise_id
-        }
+        try:
+            consistent_base_data = {
+                "LoggerFile": self.logger_file,
+                "ExportTime": self.export_time,
+                "ExerciseId": self.exercise_id,
+                "ExporterMarkingText": self.exporter_marking_text[event_report.logger_pdu.pdu.originatingEntityID]
+            }
+        except KeyError:
+            consistent_base_data = {
+                "LoggerFile": self.logger_file,
+                "ExportTime": self.export_time,
+                "ExerciseId": self.exercise_id,
+            }
 
         data_to_insert = event_report.fixed_data | event_report.variable_data | event_report.base_data | \
                          consistent_base_data
@@ -243,6 +253,10 @@ class LoggerSQLExporter:
         self._batch_dicts(event_report.event_name, [data_to_insert])
 
     def _export_entity_state(self, logger_pdu: LoggerPDU):
+        # Set ExporterMarkingText
+        marking_text = "".join(map(chr, logger_pdu.pdu.marking.characters))
+        self.exporter_marking_text[logger_pdu.pdu.entityID.__str__()] = marking_text
+
         base_data = {
             "SenderIdSite": logger_pdu.pdu.entityID.siteID,
             "SenderIdHost": logger_pdu.pdu.entityID.applicationID,
@@ -253,7 +267,8 @@ class LoggerSQLExporter:
 
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
-            "ExerciseId": self.exercise_id
+            "ExerciseId": self.exercise_id,
+            "ExporterMarkingText": marking_text
         }
 
         # Ints
@@ -367,7 +382,8 @@ class LoggerSQLExporter:
 
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
-            "ExerciseId": self.exercise_id
+            "ExerciseId": self.exercise_id,
+            "ExporterMarkingText": self.exporter_marking_text[logger_pdu.pdu.firingEntityID.__str__()]
         }
 
         self._batch_dicts("FirePdu", [firepdu])
@@ -412,7 +428,8 @@ class LoggerSQLExporter:
 
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
-            "ExerciseId": self.exercise_id
+            "ExerciseId": self.exercise_id,
+            "ExporterMarkingText": self.exporter_marking_text[logger_pdu.pdu.firingEntityID.__str__()]
         }
 
         self._batch_dicts("DetonationPdu", [detonation_pdu])
@@ -455,7 +472,8 @@ class LoggerSQLExporter:
 
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
-            "ExerciseId": self.exercise_id
+            "ExerciseId": self.exercise_id,
+            "ExporterMarkingText": self.exporter_marking_text[logger_pdu.pdu.radioReferenceID.__str__()]
         }
 
         self._batch_dicts("TransmitterPDU", [transmitter_pdu])
