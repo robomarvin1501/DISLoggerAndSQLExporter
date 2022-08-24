@@ -211,14 +211,27 @@ class EventReportInterpreter:
 
 class LoggerSQLExporter:
     """
-    Exporter:
-        A class with a buffer of data to export, which it does every time the buffer fills (say, 400 pieces?)
-        Stores some things persistently, (eg SenderId -> MarkingText)
+    This class manages the individual Exporter instances, and received data from other places, such as the Logger, or
+    a file.
+    Each base message has its own export method, in order to make the format of the data going in to SQL
+    Each Event Report is handled by a single method, that calls to EventReportInterpreter, and uses the encoder
+    to understand.
 
+    Some data is stored persistently here, to be disseminated to the messages.
+    An example of this is the ExporterMarkingText, which is stored in a dictionary where the keys are the __str__() of
+    the EntityID (or whatever is most amenable)
     """
 
     def __init__(self, logger_file: str, export_db: str, exercise_id: int, new_db: bool = False,
                  max_buffer_size: int = 400):
+        """
+        <!-- DEPRECATED max_buffer_size THIS FIELD DOES NOTHING AND WILL BE REMOVED --!>
+        :param logger_file: str
+        :param export_db: str
+        :param exercise_id: int
+        :param new_db: bool
+        :param max_buffer_size: int
+        """
         if new_db:
             # Creates the Event Report tables when it's a new db. Can be run every time, but unnecessary
             ***REMOVED***()
@@ -233,6 +246,7 @@ class LoggerSQLExporter:
         self.export_time = datetime.datetime.now()
         self.exercise_id = exercise_id
 
+        # DEPRECATED will be changed to a list in the future
         self.sql_tables: dict[str, sqlalchemy.Table] = {
             "EntityStateInts": sqlalchemy.Table("EntityStateInts", self.sql_meta, autoload_with=self.sql_engine),
             "EntityStateLocations": sqlalchemy.Table("EntityStateLocations", self.sql_meta,
@@ -243,28 +257,37 @@ class LoggerSQLExporter:
             "TransmitterPDU": sqlalchemy.Table("TransmitterPDU", self.sql_meta, autoload_with=self.sql_engine),
         }
 
+        # Stores the mapping from EntityID to MarkingText
         self.exporter_marking_text = {}
 
+        # This dict of the Exporters to which data is passed to be sent to tables in a multithreaded manner
         self.exporters = {name: Exporter(name, self.sql_meta, self.sql_engine) for name in self.sql_tables.keys()}
 
+        # DEPRECATED
         self.max_buffer_size = max_buffer_size
 
+        # DEPRECATED
         self.entity_state_buffer = []
 
         self.read_encoder()
 
     def export(self, logger_pdu: LoggerPDU):
+        """
+        Accepts a LoggerPDU, and passes the data to the methods for dealing with each individual case.
+        All EventReports are sent to a single method, and the base messages are given their own methods.
+        :param logger_pdu: LoggerPDU
+        :return: None
+        """
         pdu_type = type(logger_pdu.pdu)
         if pdu_type == opendis.dis7.EventReportPdu:
             if str(logger_pdu.pdu.eventType) not in self.pdu_encoder:
+                # Only the Event Reports mentioned in the PduEncoder
                 return
             event_report = EventReportInterpreter(logger_pdu, self.pdu_encoder)
             self._export_event_report(event_report)
         else:
             if pdu_type == opendis.dis7.EntityStatePdu:
-                # ent_state_start = time.perf_counter()
                 self._export_entity_state(logger_pdu)
-                # print(f"entity state: {time.perf_counter() - ent_state_start}")
             elif pdu_type == opendis.dis7.FirePdu:
                 self._export_fire_pdu(logger_pdu)
             elif pdu_type == opendis.dis7.DetonationPdu:
@@ -273,6 +296,10 @@ class LoggerSQLExporter:
                 self._export_transmitter_pdu(logger_pdu)
 
     def read_encoder(self):
+        """
+        Loads the PduEncoder into the class for interpreting the EventReports
+        :return: None
+        """
         encoder_subdir = max(os.listdir("encoders/"))
         with open(f"encoders/{encoder_subdir}/PduEncoder.json", 'r') as f:
             encoder = json.load(f)
@@ -280,6 +307,13 @@ class LoggerSQLExporter:
         self.pdu_encoder = encoder
 
     def _export_event_report(self, event_report: EventReportInterpreter):
+        """
+        Takes an event report, creates the base data that is consistent across all EventReports, merges that data
+        together with the data gathered from the EventReport field, and sends it to the relevant
+        Exporter for exporting to SQL
+        :param event_report: EventReportInterpreter
+        :return: None
+        """
         # print(f"Exported event report: {event_report}")
         try:
             consistent_base_data = {
@@ -297,12 +331,20 @@ class LoggerSQLExporter:
                 "ExerciseId": self.exercise_id,
             }
 
+        # Merges the dicts together into a single dict for entry into SQL
         data_to_insert = event_report.fixed_data | event_report.variable_data | event_report.base_data | \
                          consistent_base_data
 
         self._batch_dicts(event_report.event_name, [data_to_insert])
 
     def _export_entity_state(self, logger_pdu: LoggerPDU):
+        """
+        This method calls numerous other methods in order to export EntityState to the SQL sub tables.
+        First off the base data required by all EntityState tables is created, and is then passed to the
+        other methods for incorporation
+        :param logger_pdu: LoggerPDU
+        :return: None
+        """
         # Set ExporterMarkingText
         marking_text = "".join(map(chr, logger_pdu.pdu.marking.characters))
         self.exporter_marking_text[logger_pdu.pdu.entityID.__str__()] = marking_text
@@ -329,8 +371,17 @@ class LoggerSQLExporter:
         self._entity_state_texts(logger_pdu, base_data)
 
     def _entity_state_ints(self, logger_pdu: LoggerPDU, base_data: dict):
-        # TODO discuss the removal of LifeformState, and Weapon2, along with potential adjustement of exported values to be inline with the DIS spec
+        """
+        Creates data for the EntityStateInts table.
+        3 Rows are exported for every EntityStatePdu, Damage, Weapon1, and forceId.
+        These are created individually, before being sent together to the relevant Exporter.
 
+        The damage field is taken from a specific section of the entityAppearance field.
+        See the DIS documentation for more information.
+        :param logger_pdu: LoggerPDU
+        :param base_data: dict
+        :return: None
+        """
         # Reversed for ease of indexing, since the documentation talks of bit 0, and that is the rightmost digit
         # in the non reversed number
         entity_appearance = bin(logger_pdu.pdu.entityAppearance)[2:][::-1]
@@ -359,6 +410,12 @@ class LoggerSQLExporter:
         self._batch_dicts("EntityStateInts", overall_dicts)
 
     def _entity_state_locs(self, logger_pdu: LoggerPDU, base_data: dict):
+        """
+        Creates the data for the EntityStateLocations table
+        :param logger_pdu: LoggerPDU
+        :param base_data: dict
+        :return: None
+        """
         entity_locs = base_data | {
             "GeoLocationX": logger_pdu.pdu.entityLocation.x,
             "GeoLocationY": logger_pdu.pdu.entityLocation.y,
@@ -376,6 +433,14 @@ class LoggerSQLExporter:
         self._batch_dicts("EntityStateLocations", [entity_locs])
 
     def _entity_state_texts(self, logger_pdu: LoggerPDU, base_data: dict):
+        """
+        Creates the data for the EntityStateTexts table.
+        2 rows are inserted for each EntityStatePdu, MarkingText, and EntityType.
+        These are created individually, before being sent together to the relevant Exporter.
+        :param logger_pdu: LoggerPDU
+        :param base_data: dict
+        :return: None
+        """
         # MarkingText
         entity_texts_marking = base_data | {
             "TextType": "MarkingText",
@@ -392,6 +457,11 @@ class LoggerSQLExporter:
         self._batch_dicts("EntityStateTexts", [entity_texts_marking, entity_texts_type])
 
     def _export_fire_pdu(self, logger_pdu: LoggerPDU):
+        """
+        Creates data for the FirePDU table
+        :param logger_pdu: LoggerPDU
+        :return: None
+        """
         munition_type = logger_pdu.pdu.descriptor.munitionType
 
         firepdu = {
@@ -439,6 +509,11 @@ class LoggerSQLExporter:
         self._batch_dicts("FirePdu", [firepdu])
 
     def _export_detonation_pdu(self, logger_pdu: LoggerPDU):
+        """
+        Creates data for the DetonationPDU table
+        :param logger_pdu: LoggerPDU
+        :return: None
+        """
         munition_type = logger_pdu.pdu.descriptor.munitionType
 
         detonation_pdu = {
@@ -485,6 +560,11 @@ class LoggerSQLExporter:
         self._batch_dicts("DetonationPdu", [detonation_pdu])
 
     def _export_transmitter_pdu(self, logger_pdu: LoggerPDU):
+        """
+        Creates data for the TransmitterPDU table
+        :param logger_pdu: LoggerPDU
+        :return: None
+        """
         radio_entity_type = logger_pdu.pdu.radioEntityType
 
         transmitter_pdu = {
@@ -528,7 +608,14 @@ class LoggerSQLExporter:
 
         self._batch_dicts("TransmitterPDU", [transmitter_pdu])
 
-    def _batch_dicts(self, table, d: list):
+    def _batch_dicts(self, table: str, d: list[dict]):
+        """
+        Accepts the name of the target table, and the data to insert as a list of dicts. Then passes that data on to
+        the relevant Exporter, and if there is no such Exporter, creates one.
+        :param table: str
+        :param d: list[dict]
+        :return: None
+        """
         try:
             self.exporters[table].add_data(d)
         except KeyError:
@@ -536,11 +623,29 @@ class LoggerSQLExporter:
             self.exporters[table].add_data(d)
 
     def _thread_export(self, table: sqlalchemy.Table, data: list[dict], *args):
+        """
+        <!-- DEPRECATED: THIS METHOD IS NOT RELEVANT ANY MORE AND WILL BE REMOVED --!>
+        """
         with self.sql_engine.begin() as connection:
             connection.execute(table.insert(), data)
 
 
 def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=False, debug=False):
+    """
+    The purpose of this function is to export the given loggerfile of data to SQL.
+    I do not anticipate it being used much, but occasionally we do have to export data to SQL again for some reason or
+    other.
+    You should be warned, using this is intense on the EntityState tables. There is a huge amount of data to enter, and
+    this function inserts it all as fast as humanly possible. These tables, being the largest, are often out of
+    commission for the duration.
+
+    :param logger_file: str : Name of the logger file to export
+    :param db_name: str : Name of the target database
+    :param exercise_id: int : Exercise ID of experiment to export
+    :param new_db: bool : Whether or not this is a new database (empty) or not
+    :param debug: bool : Debug mode, more logging detail
+    :return: None
+    """
     if debug:
         errors = 0
         separator_errors = 0
@@ -550,13 +655,14 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
     with lzma.open(f"logs/{logger_file}", 'r') as f:
         raw_data = f.read().split(b"line_separator")
 
-        data = []
+        data = []  # DEPRECATED move into debug mode
         logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db, max_buffer_size=400)
 
         total = len(raw_data)
         print(f"Start time: {datetime.datetime.now()}")
         print(f"Total packets: {len(raw_data):,}")
         for i, line in enumerate(raw_data):
+            # Give progress updates when exporting. It's nice to see how far along we are.
             if i % 100_000 == 0:
                 print(f"{i:,}")
 
