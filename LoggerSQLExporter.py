@@ -20,6 +20,13 @@ from opendis.PduFactory import createPdu
 
 
 def sql_engine(db: str):
+    """
+    A variation of the ***REMOVED***.Tools sqlConn function, since I needed an engine, rather than a connection
+    Little reason to change what mostly works
+    Additionally, features pool_size, for using multiple threads.
+    :param db: str
+    :return: sqlalchemy.engine
+    """
     ***REMOVED***
     params = urllib.parse.quote_plus(conn_str)
     engine = sqlalchemy.create_engine("mssql+pyodbc:///?odbc_connect=%s" % params, pool_size=5_000, max_overflow=0)
@@ -31,7 +38,20 @@ logging.basicConfig(filename="logger_exporter.log", encoding="utf-8", level=logg
 
 
 class Exporter:
+    """
+    An instance of this class is created for each table to which data is exported, eg EntityStateInts,
+    EntityStateTexts, FirePDU, etc.
+    This enables dumping data to SQL through numerous threads.
+    This is useful since one must wait for SQL to return that the entry of data was a success, but if it's split off
+    to another thread, then it doesn't affect the mainloop.
+    """
+
     def __init__(self, table_name: str, sql_meta: sqlalchemy.MetaData, sql_engine: sqlalchemy.engine):
+        """
+        :param table_name: str : The name of the target table
+        :param sql_meta: sqlalchemy.MetaData
+        :param sql_engine: sqlalchemy.engine
+        """
         self.table_name = table_name
         self.table = sqlalchemy.Table(table_name, sql_meta, autoload_with=sql_engine)
         self.sql_engine = sql_engine
@@ -42,9 +62,19 @@ class Exporter:
         threading.Thread(target=self.export, args=()).start()
 
     def add_data(self, data_to_add: list):
+        """
+        Adds rows to the internal variable which holds data to export to the database
+        :param data_to_add: list[dict]
+        :return: None
+        """
         self.data += data_to_add
 
     def export(self):
+        """
+        Exports data to the target table.
+        This is targeted by a thread, and should not really be called by you
+        :return: None
+        """
         # base_tables = ["EntityStateInts", "EntityStateLocations", "EntityStateTexts", "FirePdu", "DetonationPdu", "TransmitterPDU"]
         base_tables = ["EntityStateInts", "EntityStateLocations", "EntityStateTexts"]
         if len(self.data) == 0:
@@ -52,6 +82,8 @@ class Exporter:
                 print(f"No data in {self.table_name}")
 
             if threading.main_thread().is_alive():
+                # Only keep exporting data while the main thread is still alive
+                # If the main thread has finished, then no more data will reach here, and so this thread can end
                 threading.Timer(1, self.export).start()
 
         else:
@@ -106,7 +138,15 @@ class LoggerPDU:
 
 
 class EventReportInterpreter:
+    """
+    Interprets an Event Report from a collection of bytes, into something useful based off the format
+    found in the PduEncoder.json
+    """
     def __init__(self, pdu: LoggerPDU, pdu_encoder: dict):
+        """
+        :param pdu: LoggerPDU
+        :param pdu_encoder: dict
+        """
         self.logger_pdu = pdu
         self.event_num = self.logger_pdu.pdu.eventType
         self.event_name = pdu_encoder[str(self.event_num)]["event_name"]
@@ -123,6 +163,10 @@ class EventReportInterpreter:
         return f"{self.variable_data}\n{self.fixed_data}"
 
     def interpret_pdu(self):
+        """
+        Interprets the Event Report into something understandable, rather than the collection of obscure bytes
+        :return: None
+        """
         for var_data, data_name in zip(self.logger_pdu.pdu.variableDatums,
                                        self.pdu_encoder[str(self.event_num)]["VariableData"].keys()):
             # self.variable_data.append((data_name, [''.join(map(chr, var_data.variableData))]))
@@ -148,6 +192,10 @@ class EventReportInterpreter:
         self._get_base_data()
 
     def _get_base_data(self):
+        """
+        There is an amount of data that exists for every Event Report. This method makes that data.
+        :return: None
+        """
         self.base_data["SenderIdSite"] = self.logger_pdu.pdu.originatingEntityID.siteID
         self.base_data["SenderIdHost"] = self.logger_pdu.pdu.originatingEntityID.applicationID
         self.base_data["SenderIdNum"] = self.logger_pdu.pdu.originatingEntityID.entityID
