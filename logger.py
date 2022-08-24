@@ -4,6 +4,7 @@ import socket
 import struct
 import sys
 import datetime
+import traceback
 
 from opendis.PduFactory import createPdu
 from LoggerSQLExporter import LoggerSQLExporter, LoggerPDU
@@ -57,8 +58,9 @@ class DISReceiver:
             received_exercise_id = -1
             data, addr = "", ""
             world_timestamp = 0
+            packettime = -1
             # Keep looping until a pdu with the correct ExerciseID is received
-            while received_exercise_id != self.exercise_id:
+            while received_exercise_id != self.exercise_id and packettime < 0:
                 try:
                     data, addr = self.sock.recvfrom(self.msg_len)
                     world_timestamp = datetime.datetime.now().timestamp()
@@ -76,11 +78,16 @@ class DISReceiver:
                 if received_pdu is not None:
                     received_exercise_id = received_pdu.exerciseID
 
-            packettime = world_timestamp - self.starting_timestamp
-            assert packettime > 0
+                packettime = world_timestamp - self.starting_timestamp
+
+            if packettime < 0:
+                print(f"PACKETTIME LESS THAN 0: {packettime}")
+
+            assert packettime >= 0
             return addr, data, packettime, world_timestamp
         except Exception as e:
             print(f"Got exception trying to receive {e}")
+            logging.error(traceback.format_exc())
             raise StopIteration
 
     def __del__(self):
@@ -219,4 +226,8 @@ if __name__ == "__main__":
 
     # receiver_thread.join()
     print("Program ended")
-    input("Press any key to continue: ")
+    print("""
+    ============================================================
+    PLEASE WAIT FOR THE WINDOW TO CLOSE ITSELF
+    ============================================================
+    """)
