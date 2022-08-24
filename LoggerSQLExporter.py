@@ -231,6 +231,12 @@ class LoggerSQLExporter:
 
         self.pdu_encoder = encoder
 
+    def _get_exporter_marking_text(self, entityid: str):
+        try:
+            return self.exporter_marking_text[entityid]
+        except KeyError:
+            return None
+
     def _export_event_report(self, event_report: EventReportInterpreter):
         # print(f"Exported event report: {event_report}")
         try:
@@ -238,11 +244,12 @@ class LoggerSQLExporter:
                 "LoggerFile": self.logger_file,
                 "ExportTime": self.export_time,
                 "ExerciseId": self.exercise_id,
-                "ExporterMarkingText": self.exporter_marking_text[
-                    event_report.logger_pdu.pdu.originatingEntityID.__str__()]
+                "ExporterMarkingText": self._get_exporter_marking_text(
+                    event_report.logger_pdu.pdu.originatingEntityID.__str__())
             }
         except KeyError:
-            logging.warning(f"{event_report.logger_pdu.pdu.originatingEntityID.__str__()} Does not exist in the marking text dict")
+            logging.warning(
+                f"{event_report.logger_pdu.pdu.originatingEntityID.__str__()} Does not exist in the marking text dict")
             consistent_base_data = {
                 "LoggerFile": self.logger_file,
                 "ExportTime": self.export_time,
@@ -385,7 +392,7 @@ class LoggerSQLExporter:
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
             "ExerciseId": self.exercise_id,
-            "ExporterMarkingText": self.exporter_marking_text[logger_pdu.pdu.firingEntityID.__str__()]
+            "ExporterMarkingText": self._get_exporter_marking_text(logger_pdu.pdu.firingEntityID.__str__())
         }
 
         self._batch_dicts("FirePdu", [firepdu])
@@ -431,7 +438,7 @@ class LoggerSQLExporter:
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
             "ExerciseId": self.exercise_id,
-            "ExporterMarkingText": self.exporter_marking_text[logger_pdu.pdu.firingEntityID.__str__()]
+            "ExporterMarkingText": self._get_exporter_marking_text(logger_pdu.pdu.firingEntityID.__str__())
         }
 
         self._batch_dicts("DetonationPdu", [detonation_pdu])
@@ -475,7 +482,7 @@ class LoggerSQLExporter:
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
             "ExerciseId": self.exercise_id,
-            "ExporterMarkingText": self.exporter_marking_text[logger_pdu.pdu.radioReferenceID.__str__()]
+            "ExporterMarkingText": self._get_exporter_marking_text(logger_pdu.pdu.radioReferenceID.__str__())
         }
 
         self._batch_dicts("TransmitterPDU", [transmitter_pdu])

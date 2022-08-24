@@ -4,6 +4,7 @@ import socket
 import struct
 import sys
 import datetime
+import traceback
 
 from opendis.PduFactory import createPdu
 from LoggerSQLExporter import LoggerSQLExporter, LoggerPDU
@@ -41,7 +42,9 @@ class DISReceiver:
             received_exercise_id = -1
             data, addr = "", ""
             world_timestamp = 0
-            while received_exercise_id != self.exercise_id:
+            packettime = -1
+            # Keep looping until a pdu with the correct ExerciseID is received
+            while received_exercise_id != self.exercise_id and packettime < 0:
                 try:
                     data, addr = self.sock.recvfrom(self.msg_len)
                     world_timestamp = datetime.datetime.now().timestamp()
@@ -57,11 +60,16 @@ class DISReceiver:
                 if received_pdu is not None:
                     received_exercise_id = received_pdu.exerciseID
 
-            packettime = world_timestamp - self.starting_timestamp
-            assert packettime > 0
+                packettime = world_timestamp - self.starting_timestamp
+
+            if packettime < 0:
+                print(f"PACKETTIME LESS THAN 0: {packettime}")
+
+            assert packettime >= 0
             return addr, data, packettime, world_timestamp
         except Exception as e:
             print(f"Got exception trying to receive {e}")
+            logging.error(traceback.format_exc())
             raise StopIteration
 
     def __del__(self):
@@ -90,11 +98,6 @@ class DataWriter:
     def __enter__(self):
         self.output_file = open(f"{self.logger_dir}/{self.output_file_name}", 'ab')
         return self
-
-    # def __del__(self):
-    #     print("Writer deleted")
-    #     self.output_file.write(self.lzc.flush())
-    #     self.output_file.close()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         print(f"Writer closed {exc_type} : {exc_val} : {exc_tb}")
@@ -140,12 +143,13 @@ if __name__ == "__main__":
     logger_file = config_data["logger_file"]
     db_name = config_data["database_name"]
     new_db = config_data["new_database"]
+    message_length = config_data["message_length"]
 
     if export:
         LSE = LoggerSQLExporter(logger_file, db_name, EXERCISE_ID, new_db=new_db)
 
         with DataWriter(logger_file, "logs", lzc) as writer:
-            with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+            with DISReceiver(3000, EXERCISE_ID, msg_len=message_length) as r:
                 for (address, data, packettime, world_timestamp) in r:
                     # print(f"Got packet from {address}: {data}")
                     try:
@@ -166,7 +170,7 @@ if __name__ == "__main__":
 
     else:
         with DataWriter(logger_file, "logs", lzc) as writer:
-            with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+            with DISReceiver(3000, EXERCISE_ID, msg_len=message_length) as r:
                 for (address, data, packettime, world_timestamp) in r:
                     print(f"Got packet from {address}: {data}")
                     # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
@@ -174,4 +178,8 @@ if __name__ == "__main__":
 
     # receiver_thread.join()
     print("Program ended")
-    input("Press any key to continue: ")
+    print("""
+    ============================================================
+    PLEASE WAIT FOR THE WINDOW TO CLOSE ITSELF
+    ============================================================
+    """)
