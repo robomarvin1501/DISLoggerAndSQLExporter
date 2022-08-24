@@ -142,6 +142,7 @@ class EventReportInterpreter:
     Interprets an Event Report from a collection of bytes, into something useful based off the format
     found in the PduEncoder.json
     """
+
     def __init__(self, pdu: LoggerPDU, pdu_encoder: dict):
         """
         :param pdu: LoggerPDU
@@ -222,15 +223,12 @@ class LoggerSQLExporter:
     the EntityID (or whatever is most amenable)
     """
 
-    def __init__(self, logger_file: str, export_db: str, exercise_id: int, new_db: bool = False,
-                 max_buffer_size: int = 400):
+    def __init__(self, logger_file: str, export_db: str, exercise_id: int, new_db: bool = False):
         """
-        <!-- DEPRECATED max_buffer_size THIS FIELD DOES NOTHING AND WILL BE REMOVED --!>
         :param logger_file: str
         :param export_db: str
         :param exercise_id: int
         :param new_db: bool
-        :param max_buffer_size: int
         """
         if new_db:
             # Creates the Event Report tables when it's a new db. Can be run every time, but unnecessary
@@ -246,28 +244,15 @@ class LoggerSQLExporter:
         self.export_time = datetime.datetime.now()
         self.exercise_id = exercise_id
 
-        # DEPRECATED will be changed to a list in the future
-        self.sql_tables: dict[str, sqlalchemy.Table] = {
-            "EntityStateInts": sqlalchemy.Table("EntityStateInts", self.sql_meta, autoload_with=self.sql_engine),
-            "EntityStateLocations": sqlalchemy.Table("EntityStateLocations", self.sql_meta,
-                                                     autoload_with=self.sql_engine),
-            "EntityStateTexts": sqlalchemy.Table("EntityStateTexts", self.sql_meta, autoload_with=self.sql_engine),
-            "FirePdu": sqlalchemy.Table("FirePdu", self.sql_meta, autoload_with=self.sql_engine),
-            "DetonationPdu": sqlalchemy.Table("DetonationPdu", self.sql_meta, autoload_with=self.sql_engine),
-            "TransmitterPDU": sqlalchemy.Table("TransmitterPDU", self.sql_meta, autoload_with=self.sql_engine),
-        }
+        # Indicates which table connections to make on program start up. Currently only the base tables.
+        self.starter_sql_tables = ["EntityStateInts", "EntityStateLocations", "EntityStateTexts", "FirePdu",
+                                   "DetonationPdu", "TransmitterPDU"]
 
         # Stores the mapping from EntityID to MarkingText
         self.exporter_marking_text = {}
 
         # This dict of the Exporters to which data is passed to be sent to tables in a multithreaded manner
-        self.exporters = {name: Exporter(name, self.sql_meta, self.sql_engine) for name in self.sql_tables.keys()}
-
-        # DEPRECATED
-        self.max_buffer_size = max_buffer_size
-
-        # DEPRECATED
-        self.entity_state_buffer = []
+        self.exporters = {name: Exporter(name, self.sql_meta, self.sql_engine) for name in self.starter_sql_tables}
 
         self.read_encoder()
 
@@ -320,23 +305,13 @@ class LoggerSQLExporter:
         :param event_report: EventReportInterpreter
         :return: None
         """
-        # print(f"Exported event report: {event_report}")
-        try:
-            consistent_base_data = {
-                "LoggerFile": self.logger_file,
-                "ExportTime": self.export_time,
-                "ExerciseId": self.exercise_id,
-                "ExporterMarkingText": self._get_exporter_marking_text(
-                    event_report.logger_pdu.pdu.originatingEntityID.__str__())
-            }
-        except KeyError:
-            logging.warning(
-                f"{event_report.logger_pdu.pdu.originatingEntityID.__str__()} Does not exist in the marking text dict")
-            consistent_base_data = {
-                "LoggerFile": self.logger_file,
-                "ExportTime": self.export_time,
-                "ExerciseId": self.exercise_id,
-            }
+        consistent_base_data = {
+            "LoggerFile": self.logger_file,
+            "ExportTime": self.export_time,
+            "ExerciseId": self.exercise_id,
+            "ExporterMarkingText": self._get_exporter_marking_text(
+                event_report.logger_pdu.pdu.originatingEntityID.__str__())
+        }
 
         # Merges the dicts together into a single dict for entry into SQL
         data_to_insert = event_report.fixed_data | event_report.variable_data | event_report.base_data | \
@@ -629,13 +604,6 @@ class LoggerSQLExporter:
             self.exporters[table] = Exporter(table, self.sql_meta, self.sql_engine)
             self.exporters[table].add_data(d)
 
-    def _thread_export(self, table: sqlalchemy.Table, data: list[dict], *args):
-        """
-        <!-- DEPRECATED: THIS METHOD IS NOT RELEVANT ANY MORE AND WILL BE REMOVED --!>
-        """
-        with self.sql_engine.begin() as connection:
-            connection.execute(table.insert(), data)
-
 
 def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=False, debug=False):
     """
@@ -662,7 +630,8 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
     with lzma.open(f"logs/{logger_file}", 'r') as f:
         raw_data = f.read().split(b"line_separator")
 
-        data = []  # DEPRECATED move into debug mode
+        if debug:
+            data = []
         logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db, max_buffer_size=400)
 
         total = len(raw_data)
@@ -677,7 +646,8 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
                 try:
                     logger_pdu = LoggerPDU(line)
 
-                    # data.append(logger_pdu)
+                    if debug:
+                        data.append(logger_pdu)
 
                     logger_sql_exporter.export(logger_pdu)
 
