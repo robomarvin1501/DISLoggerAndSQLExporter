@@ -75,10 +75,12 @@ class Exporter:
         This is targeted by a thread, and should not really be called by you
         :return: None
         """
-        # base_tables = ["EntityStateInts", "EntityStateLocations", "EntityStateTexts", "FirePdu", "DetonationPdu", "TransmitterPDU"]
-        base_tables = ["EntityStateInts", "EntityStateLocations", "EntityStateTexts"]
+        # tracked_tables = ["EntityStateInts", "EntityStateLocations", "EntityStateTexts", "FirePdu", "DetonationPdu", "TransmitterPDU"]
+        # These are the tables that print their status into stdout
+        # I have selected these 3 since they are the most active, and most likely to delay the end of the program
+        tracked_tables = ["EntityStateInts", "EntityStateLocations", "EntityStateTexts"]
         if len(self.data) == 0:
-            if self.table_name in base_tables:
+            if self.table_name in tracked_tables:
                 print(f"No data in {self.table_name}")
 
             if threading.main_thread().is_alive():
@@ -89,11 +91,11 @@ class Exporter:
         else:
             with self.sql_engine.begin() as connection:
                 with self.lock:
-                    if self.table_name in base_tables:
+                    if self.table_name in tracked_tables:
                         uid = hash(datetime.datetime.now())
                         print(f"Exporting: {self.table_name}, pid={uid}")
                     connection.execute(self.table.insert(), self.data)
-                    if self.table_name in base_tables:
+                    if self.table_name in tracked_tables:
                         print(f"Done: {self.table_name}, pid={uid}")
                     self.data = []
 
