@@ -170,7 +170,6 @@ class EventReportInterpreter:
         """
         for var_data, data_name in zip(self.logger_pdu.pdu.variableDatums,
                                        self.pdu_encoder[str(self.event_num)]["VariableData"].keys()):
-            # self.variable_data.append((data_name, [''.join(map(chr, var_data.variableData))]))
             self.variable_data[data_name] = ''.join(map(chr, var_data.variableData))
 
         for fixed_data, data_name, data_type in zip(self.logger_pdu.pdu.fixedDatums,
@@ -183,11 +182,9 @@ class EventReportInterpreter:
                 datum_as_bytes = bytes.fromhex(datum_as_hex)
                 datum_as_float = struct.unpack("!f", datum_as_bytes)[0]
 
-                # self.fixed_data.append((data_name, [datum_as_float]))
                 self.fixed_data[data_name] = datum_as_float
 
             elif data_type == "Int32":
-                # self.fixed_data.append((data_name, [fixed_data.fixedDatumValue]))
                 self.fixed_data[data_name] = fixed_data.fixedDatumValue
 
         self._get_base_data()
