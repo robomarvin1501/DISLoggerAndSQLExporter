@@ -48,3 +48,12 @@ This file is home to 4 classes: `Exporter`, `LoggerPDU`, `EventReportInterpreter
 `EventReportInterpreter`: This interprets any given event report from the received bytes into useful data, based off the data in the PDUEncoder. This standardised format can then be exported as necessary.  
 `LoggerSQLExporter`: This class manages all the conversion of data into formats that SQL understands, and passes them on to the relevant instances of `Exporter`, to be sent to SQL.  
 
+----------------------------
+
+##Necessary directories
+`***REMOVED***` houses the code that creates encoders based off what is found in ***REMOVED***. It also houses the `GeneralStructs.csv` file, for building such things.     
+`encoders` houses the encoders that have been generated.  
+`logs` These are the generated logs by the logger.
+
+These are all necessary for running the code, even if the code is a standalone exe. `***REMOVED***` however, does not need all the code, just the `GeneralStructs.csv` file.  
+This is because the target computer does not have ***REMOVED*** installed, and should *_NOT_* be trying to generate the PDUEncoder, or the SQL database 
