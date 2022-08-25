@@ -194,16 +194,18 @@ class EventReportInterpreter:
         There is an amount of data that exists for every Event Report. This method makes that data.
         :return: None
         """
-        self.base_data["SenderIdSite"] = self.logger_pdu.pdu.originatingEntityID.siteID
-        self.base_data["SenderIdHost"] = self.logger_pdu.pdu.originatingEntityID.applicationID
-        self.base_data["SenderIdNum"] = self.logger_pdu.pdu.originatingEntityID.entityID
+        self.base_data = self.base_data | {
+            "SenderIdSite": self.logger_pdu.pdu.originatingEntityID.siteID,
+            "SenderIdHost": self.logger_pdu.pdu.originatingEntityID.applicationID,
+            "SenderIdNum": self.logger_pdu.pdu.originatingEntityID.entityID,
 
-        self.base_data["ReceiverIdSite"] = self.logger_pdu.pdu.receivingEntityID.siteID
-        self.base_data["ReceiverIdHost"] = self.logger_pdu.pdu.receivingEntityID.applicationID
-        self.base_data["ReceiverIdNum"] = self.logger_pdu.pdu.receivingEntityID.entityID
+            "ReceiverIdSite": self.logger_pdu.pdu.receivingEntityID.siteID,
+            "ReceiverIdHost": self.logger_pdu.pdu.receivingEntityID.applicationID,
+            "ReceiverIdNum": self.logger_pdu.pdu.receivingEntityID.entityID,
 
-        self.base_data["WorldTime"] = datetime.datetime.fromtimestamp(self.logger_pdu.world_time)
-        self.base_data["PacketTime"] = self.logger_pdu.packet_time
+            "WorldTime": datetime.datetime.fromtimestamp(self.logger_pdu.world_time),
+            "PacketTime": self.logger_pdu.packet_time,
+        }
         # Loggerfile, Export time, and exercise id are dealt by the LSE
 
 
@@ -629,7 +631,7 @@ def load_file_data(logger_file: str, db_name: str, exercise_id: int, new_db=Fals
 
         if debug:
             data = []
-        logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db, max_buffer_size=400)
+        logger_sql_exporter = LoggerSQLExporter(logger_file, db_name, exercise_id, new_db=new_db)
 
         total = len(raw_data)
         print(f"Start time: {datetime.datetime.now()}")
@@ -704,4 +706,8 @@ if __name__ == "__main__":
     load_file_data(logger_file, db_name, exercise_id, new_db=new_db)
     end_time = time.perf_counter()
     print(f"Execution time: {datetime.timedelta(seconds=(end_time - start_time))}")
-    input("Press any key to continue: ")
+    print("""
+    ============================================================
+    PLEASE WAIT FOR THE WINDOW TO CLOSE ITSELF
+    ============================================================
+    """)
