@@ -252,6 +252,9 @@ class LoggerSQLExporter:
         # Stores the mapping from EntityID to MarkingText
         self.exporter_marking_text = {}
 
+        # Stores whether the scenario was most recently started or stopped
+        self.play_stop_situation = "Stop"
+
         # This dict of the Exporters to which data is passed to be sent to tables in a multithreaded manner
         self.exporters = {name: Exporter(name, self.sql_meta, self.sql_engine) for name in self.starter_sql_tables}
 
@@ -270,6 +273,17 @@ class LoggerSQLExporter:
                 # Only the Event Reports mentioned in the PduEncoder
                 return
             event_report = EventReportInterpreter(logger_pdu, self.pdu_encoder)
+
+            if event_report.event_name == "PlayStopScenario":
+                play_or_stop = event_report.fixed_data["action"]
+                if play_or_stop == 0:
+                    # Yes, 0 indicates the start of the experiment in this EventReport. Yay enums.
+                    self.play_stop_situation = "Play"
+                elif play_or_stop == 1:
+                    self.play_stop_situation = "Stop"
+                else:
+                    logging.error(f"INCORRECT VALUE {play_or_stop} RECEIVED IN PlayStopScenario. SHOULD BE 0/1")
+
             self._export_event_report(event_report)
         else:
             if pdu_type == opendis.dis7.EntityStatePdu:
@@ -311,7 +325,8 @@ class LoggerSQLExporter:
             "ExportTime": self.export_time,
             "ExerciseId": self.exercise_id,
             "ExporterMarkingText": self._get_exporter_marking_text(
-                event_report.logger_pdu.pdu.originatingEntityID.__str__())
+                event_report.logger_pdu.pdu.originatingEntityID.__str__()),
+            "PlayStop": self.play_stop_situation
         }
 
         # Merges the dicts together into a single dict for entry into SQL
@@ -343,7 +358,8 @@ class LoggerSQLExporter:
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
             "ExerciseId": self.exercise_id,
-            "ExporterMarkingText": marking_text
+            "ExporterMarkingText": marking_text,
+            "PlayStop": self.play_stop_situation
         }
 
         # Ints
@@ -486,7 +502,8 @@ class LoggerSQLExporter:
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
             "ExerciseId": self.exercise_id,
-            "ExporterMarkingText": self._get_exporter_marking_text(logger_pdu.pdu.firingEntityID.__str__())
+            "ExporterMarkingText": self._get_exporter_marking_text(logger_pdu.pdu.firingEntityID.__str__()),
+            "PlayStop": self.play_stop_situation
         }
 
         self._batch_dicts("FirePdu", [firepdu])
@@ -537,7 +554,8 @@ class LoggerSQLExporter:
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
             "ExerciseId": self.exercise_id,
-            "ExporterMarkingText": self._get_exporter_marking_text(logger_pdu.pdu.firingEntityID.__str__())
+            "ExporterMarkingText": self._get_exporter_marking_text(logger_pdu.pdu.firingEntityID.__str__()),
+            "PlayStop": self.play_stop_situation
         }
 
         self._batch_dicts("DetonationPdu", [detonation_pdu])
@@ -586,7 +604,8 @@ class LoggerSQLExporter:
             "LoggerFile": self.logger_file,
             "ExportTime": self.export_time,
             "ExerciseId": self.exercise_id,
-            "ExporterMarkingText": self._get_exporter_marking_text(logger_pdu.pdu.radioReferenceID.__str__())
+            "ExporterMarkingText": self._get_exporter_marking_text(logger_pdu.pdu.radioReferenceID.__str__()),
+            "PlayStop": self.play_stop_situation
         }
 
         self._batch_dicts("TransmitterPDU", [transmitter_pdu])
