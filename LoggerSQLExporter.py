@@ -252,6 +252,9 @@ class LoggerSQLExporter:
         # Stores the mapping from EntityID to MarkingText
         self.exporter_marking_text = {}
 
+        self.entity_state_ints_cache = {}
+        self.entity_state_texts_cache = {}
+
         # Stores whether the scenario was most recently started or stopped
         self.play_stop_situation = "Stop"
 
@@ -405,8 +408,18 @@ class LoggerSQLExporter:
         }
 
         overall_dicts = [entity_ints_damage, entity_ints_weapon1, entity_ints_forceid]
+        s_id = logger_pdu.pdu.entityID.__str__()
+        hashed_data = hash(str([d.keys() ^ {"WorldTime", "PacketTime"} for d in overall_dicts]))
+        if s_id in self.entity_state_ints_cache:
+            if hashed_data != self.entity_state_ints_cache[s_id]:
+                self._batch_dicts("EntityStateInts", overall_dicts)
+                self.entity_state_ints_cache[s_id] = hashed_data
+        else:
+            self._batch_dicts("EntityStateInts", overall_dicts)
+            self.entity_state_ints_cache[s_id] = hashed_data
 
-        self._batch_dicts("EntityStateInts", overall_dicts)
+
+        # self._batch_dicts("EntityStateInts", overall_dicts)
 
     def _entity_state_locs(self, logger_pdu: LoggerPDU, base_data: dict):
         """
@@ -453,7 +466,18 @@ class LoggerSQLExporter:
             "TextValue": f"{entity_type.entityKind}:{entity_type.domain}:{entity_type.country}:{entity_type.category}:{entity_type.subcategory}:{entity_type.specific}:{entity_type.extra}"
         }
 
-        self._batch_dicts("EntityStateTexts", [entity_texts_marking, entity_texts_type])
+        overall_dicts = [entity_texts_marking, entity_texts_type]
+        s_id = logger_pdu.pdu.entityID.__str__()
+        hashed_data = hash(str([d.keys() ^ {"WorldTime", "PacketTime"} for d in overall_dicts]))
+        if s_id in self.entity_state_texts_cache:
+            if hashed_data != self.entity_state_texts_cache[s_id]:
+                self._batch_dicts("EntityStateTexts", overall_dicts)
+                self.entity_state_texts_cache[s_id] = hashed_data
+        else:
+            self._batch_dicts("EntityStateTexts", overall_dicts)
+            self.entity_state_texts_cache[s_id] = hashed_data
+
+        # self._batch_dicts("EntityStateTexts", overall_dicts)
 
     def _export_fire_pdu(self, logger_pdu: LoggerPDU):
         """
