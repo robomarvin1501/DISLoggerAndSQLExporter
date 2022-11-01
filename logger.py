@@ -70,10 +70,16 @@ class DISReceiver:
                     print(f"Windows error, socket size? {e}")
                     sys.exit()
                 try:
+                    if data[2] == 20:
+                        # DataPdu, it is very broken.
+                        # It claims the VariableDatum is 8x longer than it actually is, and the VariableDatum is invalid
+                        # UTF-8 and ASCII both
+                        continue
                     received_pdu = createPdu(data)
                 except struct.error as e:
                     print(f"Struct exception (shibolet): {e}")
-                    sys.exit()
+                    logging.error(f"Struct exception (shibolet): {traceback.format_exc()}")
+                    continue
 
                 if received_pdu is not None:
                     received_exercise_id = received_pdu.exerciseID
@@ -86,7 +92,7 @@ class DISReceiver:
             assert packettime >= 0
             return addr, data, packettime, world_timestamp
         except Exception as e:
-            print(f"Got exception trying to receive {e}")
+            print(f"Got exception trying to receive: {e}")
             logging.error(traceback.format_exc())
             raise StopIteration
 
@@ -185,6 +191,8 @@ if __name__ == "__main__":
     if config_data["logger_file"][-5:] != ".lzma":
         config_data["logger_file"] += ".lzma"
 
+    logging.info(f"Log {config_data['logger_file']} started on {datetime.datetime.now()}")
+
     lzc = lzma.LZMACompressor()
 
     EXERCISE_ID = config_data["exercise_id"]
@@ -220,7 +228,6 @@ if __name__ == "__main__":
         with DataWriter(logger_file, "logs", lzc) as writer:
             with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
                 for (address, data, packettime, world_timestamp) in r:
-                    print(f"Got packet from {address}: {data}")
                     # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
                     writer.write(data, packettime, world_timestamp)
 

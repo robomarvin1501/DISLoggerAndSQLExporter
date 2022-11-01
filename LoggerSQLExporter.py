@@ -172,7 +172,8 @@ class EventReportInterpreter:
         """
         for var_data, data_name in zip(self.logger_pdu.pdu.variableDatums,
                                        self.pdu_encoder[str(self.event_num)]["VariableData"].keys()):
-            self.variable_data[data_name] = ''.join(map(chr, var_data.variableData))
+            self.variable_data[data_name] = var_data.variableData
+
 
         for fixed_data, data_name, data_type in zip(self.logger_pdu.pdu.fixedDatums,
                                                     self.pdu_encoder[str(self.event_num)]["FixedData"].keys(),
