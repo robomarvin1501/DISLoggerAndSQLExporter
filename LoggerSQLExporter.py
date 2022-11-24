@@ -278,7 +278,7 @@ class LoggerSQLExporter:
                 return
             event_report = EventReportInterpreter(logger_pdu, self.pdu_encoder)
 
-            if event_report.event_name == "PlayStopScenario":
+            if event_report.event_name == "PlayStopAnalysis":
                 play_or_stop = event_report.fixed_data["action"]
                 if play_or_stop == 0:
                     # Yes, 0 indicates the start of the experiment in this EventReport. Yay enums.
@@ -286,7 +286,7 @@ class LoggerSQLExporter:
                 elif play_or_stop == 1:
                     self.play_stop_situation = "Stop"
                 else:
-                    logging.error(f"INCORRECT VALUE {play_or_stop} RECEIVED IN PlayStopScenario. SHOULD BE 0/1")
+                    logging.error(f"INCORRECT VALUE {play_or_stop} RECEIVED IN PlayStopAnalysis. SHOULD BE 0/1")
 
             self._export_event_report(event_report)
         else:
