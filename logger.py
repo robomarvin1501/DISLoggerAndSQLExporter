@@ -27,12 +27,13 @@ class DISReceiver:
     world_timestamp: float  :   Number of seconds since 1970.01.01 (unix timestamp)
     """
 
-    def __init__(self, port: int, exercise_id: int, msg_len: int = 8192, timeout: int = 15):
+    def __init__(self, port: int, exercise_id: int, msg_len: int = 8192, timeout: int = 15, output_writer=print):
         """
         :param port: int : port on which dis is transmitted (usually 3000)
         :param exercise_id: int : The exercise id (experiments are usually 20, check wiki for further details)
         :param msg_len: int : The length of the message
         :param timeout: int : Amount of time to wait before giving up
+        :param output_writer: function : Function to print information. Defaults to print()
         """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -44,6 +45,8 @@ class DISReceiver:
         self.exercise_id = exercise_id
 
         self.starting_timestamp = datetime.datetime.now().timestamp()
+
+        self.output_writer = output_writer
 
     def __iter__(self):
         return self
@@ -67,7 +70,7 @@ class DISReceiver:
                 except WindowsError as e:
                     # Occurs when attempting to receive a pdu that is too large.
                     # This will be left as an error that causes an exit, any such PDUs should be caught in integrations
-                    print(f"Windows error, socket size? {e}")
+                    self.output_writer(f"Windows error, socket size? {e}")
                     sys.exit()
                 try:
                     if data[2] == 20:
@@ -77,7 +80,7 @@ class DISReceiver:
                         continue
                     received_pdu = createPdu(data)
                 except struct.error as e:
-                    print(f"Struct exception (shibolet): {e}")
+                    self.output_writer(f"Struct exception (shibolet): {e}")
                     logging.error(f"Struct exception (shibolet): {traceback.format_exc()}")
                     continue
 
@@ -87,18 +90,18 @@ class DISReceiver:
                 packettime = world_timestamp - self.starting_timestamp
 
             if packettime < 0:
-                print(f"PACKETTIME LESS THAN 0: {packettime}")
+                self.output_writer(f"PACKETTIME LESS THAN 0: {packettime}")
 
             assert packettime >= 0
             return addr, data, packettime, world_timestamp
         except Exception as e:
-            print(f"Got exception trying to receive: {e}")
+            self.output_writer(f"Got exception trying to receive: {e}")
             logging.error(traceback.format_exc())
             raise StopIteration
 
     def __del__(self):
         # Ensures that the socket is closed when deleting the object
-        print("Socket deleted")
+        self.output_writer("Socket deleted")
         self.sock.close()
 
     def __enter__(self):
@@ -106,7 +109,7 @@ class DISReceiver:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Ensures that the socket is closed when deleting the object
-        print("Socket exited")
+        self.output_writer("Socket exited")
         self.sock.close()
 
 
@@ -116,15 +119,17 @@ class DataWriter:
     It is used with the `with` statement, to ensure the files are properly opened and closed
     """
 
-    def __init__(self, output_file_name: str, logger_dir: str, lzma_compressor: lzma.LZMACompressor):
+    def __init__(self, output_file_name: str, logger_dir: str, lzma_compressor: lzma.LZMACompressor, output_writer=print):
         """
         :param output_file_name: str : name of the output file
         :param logger_dir: str : relative path from current directory to log storage
         :param lzma_compressor: lzma.LZMAConpressor : The compressor for the file
+        :param output_writer: function : Function to print information. Defaults to print()
         """
         self.output_file_name = output_file_name
         self.logger_dir = logger_dir
         self.lzc = lzma_compressor
+        self.output_writer = output_writer
 
         # These dividers are given slightly odd names. This is to ensure that they will not appear within a PDU
         # and confuse things due to a PDU being split in the middle
@@ -140,7 +145,7 @@ class DataWriter:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        print(f"Writer closed {exc_type} : {exc_val} : {exc_tb}")
+        self.output_writer(f"Writer closed {exc_type} : {exc_val} : {exc_tb}")
         self.output_file.write(self.lzc.flush())
         self.output_file.close()
 

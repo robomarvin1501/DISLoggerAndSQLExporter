@@ -26,7 +26,6 @@ def send(site=0, host=0, num=0):
         return None
 
     pdu = EventReportPdu()  # 1 9681 12
-
     pdu.receivingEntityID.entityID = num
     pdu.receivingEntityID.applicationID = host
     pdu.receivingEntityID.siteID = site
@@ -56,7 +55,7 @@ def send(site=0, host=0, num=0):
     pdu.protocolVersion = 5
 
     pdu.length = 72
-    pdu.exerciseID = 34
+    pdu.exerciseID = 20
 
     memoryStream = BytesIO()
     outputStream = DataOutputStream(memoryStream)
@@ -69,9 +68,12 @@ def send(site=0, host=0, num=0):
     # time.sleep(1)
 
 
-for site in range(1, 10_000):
-    for num in range(1, 10_000):
-        for host in range(1, 10_000):
-            if host % 100 == 0:
-                print(site, host, num)
-            send(site, host, num)
+send(1, 5355, 193)
+
+# '1-5355-193'
+# for site in range(1, 10_000):
+#     for num in range(1, 10_000):
+#         for host in range(1, 10_000):
+#             if host % 100 == 0:
+#                 print(site, host, num)
+#             send(site, host, num)
