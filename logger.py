@@ -60,7 +60,7 @@ class DISReceiver:
             world_timestamp = 0
             packettime = -1
             # Keep looping until a pdu with the correct ExerciseID is received
-            while received_exercise_id != self.exercise_id and packettime < 0:
+            while received_exercise_id != self.exercise_id or packettime < 0:
                 try:
                     data, addr = self.sock.recvfrom(self.msg_len)
                     world_timestamp = datetime.datetime.now().timestamp()
