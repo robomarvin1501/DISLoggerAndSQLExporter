@@ -92,7 +92,7 @@ class Exporter:
             with self.sql_engine.begin() as connection:
                 with self.lock:
                     if self.table_name in tracked_tables:
-                        uid = hash(datetime.datetime.now())
+                        uid = str(datetime.datetime.now())
                         print(f"Exporting: {self.table_name}, pid={uid}")
                     connection.execute(self.table.insert(), self.data)
                     if self.table_name in tracked_tables:
@@ -409,7 +409,7 @@ class LoggerSQLExporter:
 
         overall_dicts = [entity_ints_damage, entity_ints_weapon1, entity_ints_forceid]
         s_id = logger_pdu.pdu.entityID.__str__()
-        hashed_data = hash(str([d.keys() ^ {"WorldTime", "PacketTime"} for d in overall_dicts]))
+        hashed_data = str([{k: d[k] for k in (d.keys() ^ {"WorldTime", "PacketTime"})} for d in overall_dicts])
         if s_id in self.entity_state_ints_cache:
             if hashed_data != self.entity_state_ints_cache[s_id]:
                 self._batch_dicts("EntityStateInts", overall_dicts)
