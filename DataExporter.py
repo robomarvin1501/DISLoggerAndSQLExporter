@@ -71,9 +71,32 @@ class DataExporterElectricBoogaloo(QtWidgets.QMainWindow, DataExporterUi.Ui_Main
                         break
 
 
+class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
+    def __init__(self, parent=None):
+        super(DataExporterTester, self).__init__(parent)
+        self.setupUi(self)
+
+        self.maximum_time = 100
+        self.current_time = 0
+
+        self.setup_times()
+
+        self.horizontalSlider.valueChanged.connect(self.timestamp_changed)
+
+    def setup_times(self):
+        self.label_maximum_time.setText(str(self.maximum_time))
+        self.label_current_time.setText(str(self.current_time))
+
+        self.horizontalSlider.setMaximum(self.maximum_time)
+
+    def timestamp_changed(self):
+        self.label_current_time.setText(str(self.horizontalSlider.value()))
+
+
+
 def main():
     app = QApplication(sys.argv)
-    form = DataExporterElectricBoogaloo()
+    form = DataExporterTester()
     form.show()
     app.exec_()
 
