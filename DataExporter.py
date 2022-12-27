@@ -5,6 +5,7 @@ import sys
 
 from logger import DISReceiver, DataWriter
 import DataExporterUi
+from timeline import _Timeline
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QListWidgetItem
@@ -75,23 +76,11 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
     def __init__(self, parent=None):
         super(DataExporterTester, self).__init__(parent)
         self.setupUi(self)
+        self.make_timeline()
 
-        self.maximum_time = 100
-        self.current_time = 0
-
-        self.setup_times()
-
-        self.horizontalSlider.valueChanged.connect(self.timestamp_changed)
-
-    def setup_times(self):
-        self.label_maximum_time.setText(str(self.maximum_time))
-        self.label_current_time.setText(str(self.current_time))
-
-        self.horizontalSlider.setMaximum(self.maximum_time)
-
-    def timestamp_changed(self):
-        self.label_current_time.setText(str(self.horizontalSlider.value()))
-
+    def make_timeline(self):
+        self.TimeLine = _Timeline()
+        self.verticalLayout.addWidget(self.TimeLine)
 
 
 def main():
