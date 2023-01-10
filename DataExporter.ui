@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>755</width>
-    <height>664</height>
+    <width>879</width>
+    <height>598</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,29 +15,79 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="1" column="0">
-     <widget class="QSlider" name="horizontalSlider">
-      <property name="cursor">
-       <cursorShape>SizeHorCursor</cursorShape>
-      </property>
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
-     </widget>
-    </item>
-    <item row="0" column="0">
-     <widget class="QLabel" name="label_current_time">
-      <property name="text">
-       <string>TextLabel</string>
-      </property>
-     </widget>
-    </item>
     <item row="2" column="0">
-     <widget class="QLabel" name="label_maximum_time">
-      <property name="text">
-       <string>TextLabel</string>
-      </property>
-     </widget>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QPushButton" name="buttonRecord">
+          <property name="text">
+           <string>Record</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="Line" name="line">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="buttonPlay">
+          <property name="text">
+           <string>Play</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="buttonStop">
+          <property name="text">
+           <string>Stop</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="buttonPause">
+          <property name="text">
+           <string>Pause</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="Line" name="line_2">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="buttonDecreaseSpeed">
+          <property name="text">
+           <string>Decrease speed</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelPlaybackSpeed">
+          <property name="text">
+           <string>1.0x</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="buttonIncreaseSpeed">
+          <property name="text">
+           <string>Increase speed</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </item>
+    <item row="3" column="0">
+     <widget class="QWidget" name="TimeLine" native="true"/>
     </item>
    </layout>
   </widget>
@@ -46,7 +96,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>755</width>
+     <width>879</width>
      <height>21</height>
     </rect>
    </property>
