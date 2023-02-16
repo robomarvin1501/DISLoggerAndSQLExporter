@@ -200,12 +200,13 @@ if __name__ == "__main__":
     logger_file = config_data["logger_file"]
     db_name = config_data["database_name"]
     new_db = config_data["new_database"]
+    message_length = config_data["message_length"]
 
     if export:
         LSE = LoggerSQLExporter(logger_file, db_name, EXERCISE_ID, new_db=new_db)
 
         with DataWriter(logger_file, "logs", lzc) as writer:
-            with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+            with DISReceiver(3000, EXERCISE_ID, msg_len=message_length) as r:
                 for (address, data, packettime, world_timestamp) in r:
                     # print(f"Got packet from {address}: {data}")
                     try:
@@ -226,7 +227,7 @@ if __name__ == "__main__":
 
     else:
         with DataWriter(logger_file, "logs", lzc) as writer:
-            with DISReceiver(3000, EXERCISE_ID, msg_len=16_384) as r:
+            with DISReceiver(3000, EXERCISE_ID, msg_len=message_length) as r:
                 for (address, data, packettime, world_timestamp) in r:
                     # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
                     writer.write(data, packettime, world_timestamp)
