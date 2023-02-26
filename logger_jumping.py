@@ -9,6 +9,7 @@ import time
 class PlaybackLoggerFile:
     def __init__(self, loggername: str, exercise_id: int = 20):
         self.unprocessed_pdus: list[bytes] = []  # TODO maybe preload by splitting on line_divider?
+        self.logger_pdus: list[tuple[bytes, float]] = []
         self.position_pointer = 0
         self.starting_timestamp = 0
 
@@ -38,9 +39,9 @@ class PlaybackLoggerFile:
         # 1: n - 1 is closer
         # 2: n + 1 is closer
 
-        mid_time = struct.unpack("d", self.unprocessed_pdus[n].split(b"line_divider")[1])[0]
-        upper_time = struct.unpack("d", self.unprocessed_pdus[n + 1].split(b"line_divider")[1])[0]
-        lower_time = struct.unpack("d", self.unprocessed_pdus[n - 1].split(b"line_divider")[1])[0]
+        mid_time = self.logger_pdus[n][1]
+        upper_time = self.logger_pdus[n + 1][1]
+        lower_time = self.logger_pdus[n - 1][1]
 
         if target_time > mid_time:
             if target_time - upper_time <= target_time - mid_time:
@@ -60,7 +61,7 @@ class PlaybackLoggerFile:
 
     def _binary_search_for_time(self, time: float, high: int = 0, low: int = 0) -> int:
         if high == 0:
-            high = len(self.unprocessed_pdus)
+            high = len(self.logger_pdus)
         if high == low:
             return high
         elif high > low:
@@ -83,7 +84,7 @@ class PlaybackLoggerFile:
         else:
             return low
 
-    def _send(self, pdu: bytes):
+    def _send(self, pdu: tuple[bytes, float]):
         def send_pdu(pdu: bytes):
             pdu_to_send = bytearray(pdu)
 
@@ -92,19 +93,19 @@ class PlaybackLoggerFile:
             self._udp_socket.sendto(pdu_to_send, (self._DESTINATION_ADDRESS, self._UDP_PORT))
             self.position_pointer += 1
 
-        if pdu[2] == 21:
+        if pdu[0][2] == 21:
             return
         current_timestamp = datetime.datetime.now().timestamp()
 
         diff = current_timestamp - self.starting_timestamp
 
-        delay = struct.unpack("d", pdu.split(b"line_divider")[1])[0] - diff
+        delay = pdu[1] - diff
         if delay <= 0:
             # send_pdu(pdu)
             # return
             delay = 0
 
-        t = threading.Timer(delay, send_pdu, args=(pdu,))
+        t = threading.Timer(delay, send_pdu, args=(pdu[0],))
         t.start()
         self._messages_awaiting.append(t)
 
@@ -114,22 +115,23 @@ class PlaybackLoggerFile:
             raw_data = f.read().split(b"line_separator")[:-1]
             print(f"Finished reading loggerfile: {loggername}")
 
-        # total_pdus = len(raw_data)
+        total_pdus = len(raw_data)
         self.unprocessed_pdus = raw_data
         self._maximum_time = struct.unpack("d", self.unprocessed_pdus[-1].split(b"line_divider")[1])[0]
-        # self.logger_pdus = []
-        # for i, custom_pdu_bytes in enumerate(raw_data):
-        #     if i % 10_000 == 0:
-        #         print("{:,}/{:,}".format(i, total_pdus))
-        #     if custom_pdu_bytes == b'':
-        #         continue
-        #     try:
-        #         self.logger_pdus.append(PlaybackPDU(custom_pdu_bytes))
-        #     except BytesWarning:
-        #         print("struct error")
-        #         continue
-        #     except ValueError:
-        #         print("seperator error")
+        self.logger_pdus = []
+        for i, custom_pdu_bytes in enumerate(raw_data):
+            if i % 100_000 == 0:
+                print("{:,}/{:,}".format(i, total_pdus))
+            if custom_pdu_bytes == b'':
+                continue
+            try:
+                pdu = custom_pdu_bytes.split(b"line_divider")
+                self.logger_pdus.append((pdu[0], struct.unpack("d", pdu[1])[0]))
+            except BytesWarning:
+                print("struct error")
+                continue
+            except ValueError:
+                print("seperator error")
 
     def move_position_to_time(self, requested_time: float):
         # if 0 <= requested_time <= self._maximum_time:
@@ -140,21 +142,20 @@ class PlaybackLoggerFile:
         #     self.starting_timestamp = self._maximum_time
 
         if requested_time > self._maximum_time:
-            self.position_pointer = len(self.unprocessed_pdus) - 1
+            self.position_pointer = len(self.logger_pdus) - 1
             return None
-        wanted_index = self._binary_search_for_time(requested_time, len(self.unprocessed_pdus), 0)
+        wanted_index = self._binary_search_for_time(requested_time, len(self.logger_pdus), 0)
         self.position_pointer = wanted_index
 
     def start_playback(self):
         def playback():
-            pdus = self.unprocessed_pdus[self.position_pointer:]
+            pdus = self.logger_pdus[self.position_pointer:]
 
             for pdu in pdus:
                 if not self._message_stop_playback:
                     self._send(pdu)
                 else:
-                    self.move_position_to_time(
-                        struct.unpack("d", self.unprocessed_pdus[self.position_pointer].split(b"line_divider")[1])[0])
+                    self.move_position_to_time(self.logger_pdus[self.position_pointer][1])
                     self._message_stop_playback = False
                     for message in self._messages_awaiting:
                         message.cancel()
@@ -186,12 +187,12 @@ if __name__ == "__main__":
         if split_commands[0] == "move":
             plg.move_position_to_time(float(split_commands[1]))
             print(
-                f"Total pdus: {len(plg.unprocessed_pdus)}. Running time: {plg._maximum_time}")
+                f"Total pdus: {len(plg.logger_pdus)}. Running time: {plg._maximum_time}")
             print(
-                f"Current pdu: {plg.position_pointer}, current time: {struct.unpack('d', plg.unprocessed_pdus[plg.position_pointer].split(b'line_divider')[1])[0]}")
+                f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}")
         elif split_commands[0] == "play":
             print(
-                f"Current pdu: {plg.position_pointer}, current time: {struct.unpack('d', plg.unprocessed_pdus[plg.position_pointer].split(b'line_divider')[1])[0]}")
+                f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}")
             running_time = time.perf_counter()
             plg.start_playback()
         elif split_commands[0] == "stop":
@@ -199,12 +200,12 @@ if __name__ == "__main__":
             running_time = time.perf_counter() - running_time
             time.sleep(0.2)
             print(
-                f"Current pdu: {plg.position_pointer}, current time: {struct.unpack('d', plg.unprocessed_pdus[plg.position_pointer].split(b'line_divider')[1])[0]}")
+                f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}")
             print(f"Real running time: {running_time}")
         elif split_commands[0] == "show" or split_commands[0] == "status":
-            print(f"Total pdus: {len(plg.unprocessed_pdus)}. Running time: {plg._maximum_time}")
+            print(f"Total pdus: {len(plg.logger_pdus)}. Running time: {plg._maximum_time}")
             print(
-                f"Current pdu: {plg.position_pointer}, current time: {struct.unpack('d', plg.unprocessed_pdus[plg.position_pointer].split(b'line_divider')[1])[0]}")
+                f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}")
             # print(f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer].packet_time}")
         elif split_commands[0] == "exit":
             break
