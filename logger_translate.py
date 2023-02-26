@@ -27,19 +27,23 @@ from LoggerSQLExporter import LoggerPDU
 #
 # print("Dumped, exiting")
 
-loggername = "exp_1_2102_2.lzma_pickle.lzma"
+loggername = "exp_1_2102_2.lzma"
 with lzma.open(f"logs/{loggername}") as f:
     print(f"Reading loggerfile: {loggername}")
-    raw_data = f.read().split(b"line_separator")
+    raw_data = f.read()
     print(f"Finished reading loggerfile: {loggername}")
 
-total_pdus = len(raw_data)
-logger_pdus = []
-for i, custom_pdu_bytes in enumerate(raw_data):
-
-    for i, custom_pdu_bytes in enumerate(raw_data):
-        if i % 10_000 == 0:
-            print("{:,}/{:,}".format(i, total_pdus))
-        if custom_pdu_bytes == b'':
-            continue
-        logger_pdus.append(pickle.loads(custom_pdu_bytes))
+with open("logs/exp_1_2102_2", "wb") as f:
+    print("Writing raw data")
+    f.write(raw_data)
+    print("Finished")
+# total_pdus = len(raw_data)
+# logger_pdus = []
+# for i, custom_pdu_bytes in enumerate(raw_data):
+#
+#     for i, custom_pdu_bytes in enumerate(raw_data):
+#         if i % 10_000 == 0:
+#             print("{:,}/{:,}".format(i, total_pdus))
+#         if custom_pdu_bytes == b'':
+#             continue
+#         logger_pdus.append(pickle.loads(custom_pdu_bytes))
