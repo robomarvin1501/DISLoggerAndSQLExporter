@@ -1,13 +1,73 @@
 import datetime
 import lzma
+import multiprocessing
+import re
 import socket
 import threading
 import struct
 import time
 
+import logging
+logging.basicConfig(filename="jumping.log", encoding="utf8", level=logging.DEBUG)
+
+
+def sender(pdu_queue: multiprocessing.SimpleQueue, message_queue: multiprocessing.SimpleQueue,
+           returning_information_queue: multiprocessing.SimpleQueue, exercise_id: int):
+    UDP_PORT = 3000
+    DESTINATION_ADDRESS = "192.133.255.255"
+
+    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    udp_socket.bind(('', UDP_PORT))
+
+    waiting_pdus: list[threading.Timer] = []
+    starting_timestamp = 0
+
+    playback_modifier = 1
+
+    def send(pdu: bytes):
+        pdu_to_send = bytearray(pdu)
+
+        pdu_to_send[1] = exercise_id
+
+        udp_socket.sendto(pdu_to_send, (DESTINATION_ADDRESS, UDP_PORT))
+
+    while True:
+        if not message_queue.empty():
+            message = message_queue.get()
+            if message[0] == "stop":
+                executed_pdus = sum([not x.is_alive() for x in waiting_pdus])
+                for pdu in waiting_pdus:
+                    pdu.cancel()
+                returning_information_queue.put(executed_pdus)
+            elif message[0] == "starting_timestamp":
+                starting_timestamp = message[1]
+            elif message[0] == "playback":
+                playback_modifier = message[1]
+            elif message[0] == "exit":
+                break
+        if not pdu_queue.empty():
+            pdu = pdu_queue.get()
+
+            current_timestamp = datetime.datetime.now().timestamp()
+            diff = current_timestamp - starting_timestamp
+            delay = pdu[1] - diff
+
+            delay /= playback_modifier
+            logging.debug(delay)
+
+            if delay <= 0:
+                delay = 0
+
+            t = threading.Timer(delay, send, args=(pdu[0],))
+            waiting_pdus.append(t)
+            t.start()
+
 
 class PlaybackLoggerFile:
-    def __init__(self, loggername: str, exercise_id: int = 20):
+    def __init__(self, loggername: str, pdu_queue: multiprocessing.SimpleQueue,
+                 message_queue: multiprocessing.SimpleQueue, returning_information_queue: multiprocessing.SimpleQueue,
+                 exercise_id: int = 20):
         self.unprocessed_pdus: list[bytes] = []  # TODO maybe preload by splitting on line_divider?
         self.logger_pdus: list[tuple[bytes, float]] = []
         self.position_pointer = 0
@@ -18,12 +78,12 @@ class PlaybackLoggerFile:
 
         self.exercise_id = exercise_id
 
-        self._UDP_PORT = 3000
-        self._DESTINATION_ADDRESS = "192.133.255.255"
-
-        self._udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        self._udp_socket.bind(('', self._UDP_PORT))
+        # self._UDP_PORT = 3000
+        # self._DESTINATION_ADDRESS = "192.133.255.255"
+        #
+        # self._udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # self._udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        # self._udp_socket.bind(('', self._UDP_PORT))
 
         self.playback_thread = threading.Thread()
 
@@ -31,6 +91,10 @@ class PlaybackLoggerFile:
         self._messages_awaiting = []
 
         self._maximum_time = 0
+
+        self.pdu_queue: multiprocessing.SimpleQueue = pdu_queue
+        self.message_queue: multiprocessing.SimpleQueue = message_queue
+        self.returning_information_queue: multiprocessing.SimpleQueue = returning_information_queue
 
         self.load_logger(loggername)
 
@@ -85,29 +149,18 @@ class PlaybackLoggerFile:
             return low
 
     def _send(self, pdu: tuple[bytes, float]):
-        def send_pdu(pdu: bytes):
-            pdu_to_send = bytearray(pdu)
-
-            pdu_to_send[1] = self.exercise_id
-
-            self._udp_socket.sendto(pdu_to_send, (self._DESTINATION_ADDRESS, self._UDP_PORT))
-            self.position_pointer += 1
+        # def send_pdu(pdu: bytes):
+        #     pdu_to_send = bytearray(pdu)
+        #
+        #     pdu_to_send[1] = self.exercise_id
+        #
+        #     self._udp_socket.sendto(pdu_to_send, (self._DESTINATION_ADDRESS, self._UDP_PORT))
+        #     self.position_pointer += 1
 
         if pdu[0][2] == 21:
             return
-        current_timestamp = datetime.datetime.now().timestamp()
 
-        diff = current_timestamp - self.starting_timestamp
-
-        delay = pdu[1] - diff
-        if delay <= 0:
-            # send_pdu(pdu)
-            # return
-            delay = 0
-
-        t = threading.Timer(delay, send_pdu, args=(pdu[0],))
-        t.start()
-        self._messages_awaiting.append(t)
+        self.pdu_queue.put(pdu)
 
     def load_logger(self, loggername: str):
         with lzma.open(f"logs/{loggername}") as f:
@@ -155,7 +208,13 @@ class PlaybackLoggerFile:
                 if not self._message_stop_playback:
                     self._send(pdu)
                 else:
+                    while not self.pdu_queue.empty():
+                        self.pdu_queue.get()
+
+                    n_sent_pdus = self.returning_information_queue.get()
+                    self.position_pointer += n_sent_pdus
                     self.move_position_to_time(self.logger_pdus[self.position_pointer][1])
+
                     self._message_stop_playback = False
                     for message in self._messages_awaiting:
                         message.cancel()
@@ -165,6 +224,7 @@ class PlaybackLoggerFile:
             #     self.move_position_to_time(0)
 
         self.starting_timestamp = datetime.datetime.now().timestamp()
+        self.message_queue.put(("starting_timestamp", self.starting_timestamp))
         # Idiotproof check
         if not self.playback_thread.is_alive():
             self.playback_thread = threading.Thread(target=playback, daemon=True)
@@ -173,14 +233,24 @@ class PlaybackLoggerFile:
     def stop_playback(self):
         if self.playback_thread.is_alive():
             self._message_stop_playback = True
+            self.message_queue.put(("stop",))
 
 
 if __name__ == "__main__":
-    plg = PlaybackLoggerFile("exp_1_2102_2.lzma", 97)
+    pdu_queue = multiprocessing.SimpleQueue()
+    message_queue = multiprocessing.SimpleQueue()
+    returning_information_queue = multiprocessing.SimpleQueue()
+    playback = 1
+
+    plg = PlaybackLoggerFile("exp_1_2102_2.lzma", pdu_queue, message_queue, returning_information_queue, 97)
     # plg = PlaybackLoggerFile("exp_0_1807_3.lzma", 97)
     command = ""
     # # print(f"Total pdus: {len(plg.logger_pdus)}. Running time: {plg.logger_pdus[-1].packet_time}")
     running_time = 0
+    sender_process = multiprocessing.Process(target=sender,
+                                             args=(pdu_queue, message_queue, returning_information_queue, 97),
+                                             daemon=True)
+    sender_process.start()
     while command != "q":
         command = input("$ ")
         split_commands = command.split(' ')
@@ -205,8 +275,17 @@ if __name__ == "__main__":
         elif split_commands[0] == "show" or split_commands[0] == "status":
             print(f"Total pdus: {len(plg.logger_pdus)}. Running time: {plg._maximum_time}")
             print(
-                f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}")
+                f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}, playback speed: {playback}")
             # print(f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer].packet_time}")
+        elif split_commands[0] == "playback":
+            # Anything that is not a number (1, 23, 1.3, 0.3, .4) returns None
+            # Altering this requires a decent understanding of regex. I'm sorry.
+            if re.match(r"^(?=.)([+-]?([0-9]*)(\.([0-9]+))?)$", split_commands[1]) is not None:
+                playback = float(split_commands[1])
+                message_queue.put(("playback", playback))
+
         elif split_commands[0] == "exit":
+            message_queue.put(("exit",))
             break
+    sender_process.terminate()
     print("+++ PROGRAM ENDED +++")
