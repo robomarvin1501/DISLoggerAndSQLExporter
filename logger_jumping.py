@@ -23,8 +23,9 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
     udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     udp_socket.bind(('', UDP_PORT))
 
-    waiting_pdus: list[threading.Timer] = []
     starting_timestamp = 0
+    starting_message_packettime = 0
+    skip_sleep = False
 
     playback_modifier = 1
 
@@ -35,22 +36,27 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
 
         udp_socket.sendto(pdu_to_send, (DESTINATION_ADDRESS, UDP_PORT))
 
+    last_executed_time = 0
+    messages_not_slept = 0
     while True:
         usages = 0
         if message_queue.poll():
             usages += 1
             message = message_queue.recv()
             if message[0] == "stop":
-                executed_pdus = sum([not x.is_alive() for x in waiting_pdus])
-                for pdu in waiting_pdus:
-                    pdu.cancel()
                 while pdu_queue.poll():
                     pdu_queue.recv()
-                returning_information_queue.put(executed_pdus)
+                logging.debug(f"{messages_not_slept} messages not slept")
+                messages_not_slept = 0
+                returning_information_queue.put(last_executed_time)
+                last_executed_time = 0
             elif message[0] == "starting_timestamp":
-                starting_timestamp = datetime.datetime.now().timestamp()
+                starting_timestamp = message[1]
+                starting_message_packettime = message[2]
             elif message[0] == "playback":
                 playback_modifier = message[1]
+            elif message[0] == "skip_sleep":
+                skip_sleep = message[1]
             elif message[0] == "exit":
                 break
         if pdu_queue.poll():
@@ -58,18 +64,20 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
             pdu = pdu_queue.recv()
 
             current_timestamp = datetime.datetime.now().timestamp()
-            diff = current_timestamp - starting_timestamp
-            delay = pdu[1] - diff
+            play_time = current_timestamp - starting_timestamp
+            in_world_play_time = starting_message_packettime + play_time
+            delay = (pdu[1] / playback_modifier) - in_world_play_time
 
-            delay /= playback_modifier
-            logging.debug(delay)
+            if delay >= 0.1 and not skip_sleep:
+                time.sleep(delay)
+                logging.debug(f"{messages_not_slept} messages not slept")
+                messages_not_slept = 0
+                logging.debug(delay)
+            else:
+                messages_not_slept += 1
 
-            if delay <= 0:
-                delay = 0
-
-            t = threading.Timer(delay, send, args=(pdu[0],))
-            waiting_pdus.append(t)
-            t.start()
+            send(pdu[0])
+            last_executed_time = pdu[1]
         if usages == 0:
             time.sleep(1)
 
@@ -102,6 +110,9 @@ class PlaybackLoggerFile:
         self._messages_awaiting = []
 
         self._maximum_time = 0
+
+        self.playback_speed = 1
+        self.message_reduction_factor = 20
 
         self.pdu_queue: multiprocessing.connection.PipeConnection = pdu_queue
         self.message_queue: multiprocessing.connection.PipeConnection = message_queue
@@ -215,16 +226,15 @@ class PlaybackLoggerFile:
         def playback():
             pdus = self.logger_pdus[self.position_pointer:]
 
-            for pdu in pdus:
+            for n, pdu in enumerate(pdus):
                 if not self._message_stop_playback:
-                    self._send(pdu)
+                    if n % (self.playback_speed * self.message_reduction_factor) == 0 or self.playback_speed < 1:
+                        self._send(pdu)
                 else:
                     # while not self.pdu_queue.empty():
                     #     self.pdu_queue.get()
 
-                    n_sent_pdus = self.returning_information_queue.get()
-                    self.position_pointer += n_sent_pdus
-                    self.move_position_to_time(self.logger_pdus[self.position_pointer][1])
+                    self.move_position_to_time(self.returning_information_queue.get())
 
                     self._message_stop_playback = False
                     for message in self._messages_awaiting:
@@ -235,7 +245,8 @@ class PlaybackLoggerFile:
             #     self.move_position_to_time(0)
 
         self.starting_timestamp = datetime.datetime.now().timestamp()
-        self.message_queue.send(("starting_timestamp", self.starting_timestamp))
+        self.message_queue.send(
+            ("starting_timestamp", self.starting_timestamp, self.logger_pdus[self.position_pointer][1]))
         # Idiotproof check
         if not self.playback_thread.is_alive():
             self.playback_thread = threading.Thread(target=playback, daemon=True)
@@ -245,6 +256,13 @@ class PlaybackLoggerFile:
         if self.playback_thread.is_alive():
             self._message_stop_playback = True
             self.message_queue.send(("stop",))
+
+    def set_playback_speed(self, playback_speed: float):
+        self.playback_speed = playback_speed
+        self.message_queue.send(("playback", playback_speed))
+
+    def disable_sleep(self, should_sleep: bool):
+        self.message_queue.send(("skip_sleep", should_sleep))
 
 
 if __name__ == "__main__":
@@ -287,16 +305,24 @@ if __name__ == "__main__":
             print(f"Total pdus: {len(plg.logger_pdus)}. Running time: {plg._maximum_time}")
             print(
                 f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}, playback speed: {playback}")
+            print(f"Message reduction factor: {plg.playback_speed * plg.message_reduction_factor}")
             # print(f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer].packet_time}")
         elif split_commands[0] == "playback":
             # Anything that is not a number (1, 23, 1.3, 0.3, .4) returns None
             # Altering this requires a decent understanding of regex. I'm sorry.
             if re.match(r"^(?=.)([+-]?([0-9]*)(\.([0-9]+))?)$", split_commands[1]) is not None:
                 playback = float(split_commands[1])
-                message_sender.send(("playback", playback))
+                plg.set_playback_speed(playback)
+                # message_sender.send(("playback", playback))
+        elif split_commands[0] == "skip_sleep" and len(split_commands) > 1:
+            should_skip = False
+            if split_commands[1] == "1" or split_commands[1] == "True" or split_commands[1] == "true":
+                should_skip = True
+            plg.disable_sleep(should_skip)
+
 
         elif split_commands[0] == "exit":
             message_sender.send(("exit",))
             break
-    sender_process.start()
+    sender_process.terminate()
     print("+++ PROGRAM ENDED +++")
