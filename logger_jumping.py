@@ -97,13 +97,6 @@ class PlaybackLoggerFile:
 
         self.exercise_id = exercise_id
 
-        # self._UDP_PORT = 3000
-        # self._DESTINATION_ADDRESS = "192.133.255.255"
-        #
-        # self._udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # self._udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        # self._udp_socket.bind(('', self._UDP_PORT))
-
         self.playback_thread = threading.Thread()
 
         self._message_stop_playback = False
@@ -112,7 +105,7 @@ class PlaybackLoggerFile:
         self._maximum_time = 0
 
         self.playback_speed = 1
-        self.message_reduction_factor = 20
+        self.message_reduction_factor = 1
 
         self.pdu_queue: multiprocessing.connection.PipeConnection = pdu_queue
         self.message_queue: multiprocessing.connection.PipeConnection = message_queue
@@ -171,17 +164,6 @@ class PlaybackLoggerFile:
             return low
 
     def _send(self, pdu: tuple[bytes, float]):
-        # def send_pdu(pdu: bytes):
-        #     pdu_to_send = bytearray(pdu)
-        #
-        #     pdu_to_send[1] = self.exercise_id
-        #
-        #     self._udp_socket.sendto(pdu_to_send, (self._DESTINATION_ADDRESS, self._UDP_PORT))
-        #     self.position_pointer += 1
-
-        if pdu[0][2] == 21:
-            return
-
         self.pdu_queue.send(pdu)
 
     def load_logger(self, loggername: str):
@@ -209,13 +191,6 @@ class PlaybackLoggerFile:
                 print("seperator error")
 
     def move_position_to_time(self, requested_time: float):
-        # if 0 <= requested_time <= self._maximum_time:
-        #     self.starting_timestamp = requested_time
-        # elif requested_time < 0:
-        #     self.starting_timestamp = 0
-        # elif requested_time > self._maximum_time:
-        #     self.starting_timestamp = self._maximum_time
-
         if requested_time > self._maximum_time:
             self.position_pointer = len(self.logger_pdus) - 1
             return None
@@ -231,9 +206,6 @@ class PlaybackLoggerFile:
                     if n % (self.playback_speed * self.message_reduction_factor) == 0 or self.playback_speed < 1:
                         self._send(pdu)
                 else:
-                    # while not self.pdu_queue.empty():
-                    #     self.pdu_queue.get()
-
                     self.move_position_to_time(self.returning_information_queue.get())
 
                     self._message_stop_playback = False
@@ -241,8 +213,6 @@ class PlaybackLoggerFile:
                         message.cancel()
                     self._messages_awaiting = []
                     return None
-            # finally:
-            #     self.move_position_to_time(0)
 
         self.starting_timestamp = datetime.datetime.now().timestamp()
         self.message_queue.send(
@@ -272,9 +242,7 @@ if __name__ == "__main__":
     playback = 1
 
     plg = PlaybackLoggerFile("exp_1_2102_2.lzma", pdu_sender, message_sender, returning_information_queue, 97)
-    # plg = PlaybackLoggerFile("exp_0_1807_3.lzma", 97)
     command = ""
-    # # print(f"Total pdus: {len(plg.logger_pdus)}. Running time: {plg.logger_pdus[-1].packet_time}")
     running_time = 0
     sender_process = multiprocessing.Process(target=sender,
                                              args=(pdu_receiver, message_receiver, returning_information_queue, 97),
@@ -306,19 +274,19 @@ if __name__ == "__main__":
             print(
                 f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}, playback speed: {playback}")
             print(f"Message reduction factor: {plg.playback_speed * plg.message_reduction_factor}")
-            # print(f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer].packet_time}")
         elif split_commands[0] == "playback":
             # Anything that is not a number (1, 23, 1.3, 0.3, .4) returns None
             # Altering this requires a decent understanding of regex. I'm sorry.
             if re.match(r"^(?=.)([+-]?([0-9]*)(\.([0-9]+))?)$", split_commands[1]) is not None:
                 playback = float(split_commands[1])
                 plg.set_playback_speed(playback)
-                # message_sender.send(("playback", playback))
         elif split_commands[0] == "skip_sleep" and len(split_commands) > 1:
             should_skip = False
             if split_commands[1] == "1" or split_commands[1] == "True" or split_commands[1] == "true":
                 should_skip = True
             plg.disable_sleep(should_skip)
+        elif split_commands[0] == "reduction" and len(split_commands) > 1:
+            plg.message_reduction_factor = int(split_commands[1])
 
 
         elif split_commands[0] == "exit":
