@@ -77,7 +77,11 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
                 messages_not_slept += 1
 
             send(pdu[0])
-            last_executed_time = pdu[1]
+            # Ensure that when the playback is paused, and the timestamp is therefore 0,
+            # last_executed_time is not set to this.
+            # Especially useful since a pause is sent when playback is stopped
+            if pdu[1] > 1:
+                last_executed_time = pdu[1]
         if usages == 0:
             time.sleep(1)
 
@@ -103,6 +107,9 @@ class PlaybackLoggerFile:
         self._messages_awaiting = []
 
         self._maximum_time = 0
+
+        self.state_cache: dict[bytes, bytes] = dict()
+        self.paused = False
 
         self.playback_speed = 1
         self.message_reduction_factor = 1
@@ -198,15 +205,33 @@ class PlaybackLoggerFile:
         self.position_pointer = wanted_index
 
     def start_playback(self):
+        if self.paused:
+            self.unpause_playback()
+            return
+        self._message_stop_playback = False
+
         def playback():
             pdus = self.logger_pdus[self.position_pointer:]
 
             for n, pdu in enumerate(pdus):
                 if not self._message_stop_playback:
                     if n % (self.playback_speed * self.message_reduction_factor) == 0 or self.playback_speed < 1:
+                        if pdu[0][2] == 1:
+                            # Removes the interpolation when paused by setting the velocity to (0,0,0)
+                            adjusted_velocity_pdu = bytearray(pdu[0])
+                            adjusted_velocity_pdu[36:48] = b"\x00" * 12
+                            self.state_cache[pdu[0][12:18]] = adjusted_velocity_pdu
+
                         self._send(pdu)
                 else:
+                    # Wait to receive the end time
+                    while self.returning_information_queue.empty():
+                        time.sleep(0.1)
                     self.move_position_to_time(self.returning_information_queue.get())
+
+                    # Make sure that the information queue is in fact empty
+                    while not self.returning_information_queue.empty():
+                        self.returning_information_queue.get()
 
                     self._message_stop_playback = False
                     for message in self._messages_awaiting:
@@ -223,9 +248,37 @@ class PlaybackLoggerFile:
             self.playback_thread.start()
 
     def stop_playback(self):
+        self._message_stop_playback = True
+        self._send_paused_locations()
         if self.playback_thread.is_alive():
-            self._message_stop_playback = True
             self.message_queue.send(("stop",))
+
+    def _send_paused_locations(self):
+        for pdu in self.state_cache:
+            self._send((self.state_cache[pdu], 0))
+
+    def pause_playback(self):
+        self.stop_playback()
+        self.paused = True
+
+        def paused_messages():
+            while not self._message_stop_playback:
+                self._send_paused_locations()
+                time.sleep(0.5)
+
+        time.sleep(0.5)
+        # Idiotproof check
+        if not self.playback_thread.is_alive():
+            self.playback_thread = threading.Thread(target=paused_messages, daemon=True)
+            self.playback_thread.start()
+
+    def unpause_playback(self):
+        self.stop_playback()
+        self.paused = False
+        while self.playback_thread.is_alive():
+            time.sleep(0.1)
+        self._message_stop_playback = False
+        self.start_playback()
 
     def set_playback_speed(self, playback_speed: float):
         self.playback_speed = playback_speed
@@ -269,6 +322,10 @@ if __name__ == "__main__":
             print(
                 f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}")
             print(f"Real running time: {running_time}")
+        elif split_commands[0] == "pause":
+            plg.pause_playback()
+        elif split_commands[0] == "unpause":
+            plg.unpause_playback()
         elif split_commands[0] == "show" or split_commands[0] == "status":
             print(f"Total pdus: {len(plg.logger_pdus)}. Running time: {plg._maximum_time}")
             print(
@@ -287,8 +344,6 @@ if __name__ == "__main__":
             plg.disable_sleep(should_skip)
         elif split_commands[0] == "reduction" and len(split_commands) > 1:
             plg.message_reduction_factor = int(split_commands[1])
-
-
         elif split_commands[0] == "exit":
             message_sender.send(("exit",))
             break
