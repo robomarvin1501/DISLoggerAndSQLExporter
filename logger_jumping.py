@@ -87,8 +87,8 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
 
 
 class PlaybackLoggerFile:
-    def __init__(self, loggername: str, pdu_queue: multiprocessing.connection.PipeConnection,
-                 message_queue: multiprocessing.connection.PipeConnection,
+    def __init__(self, loggername: str, pdu_queue: multiprocessing.connection.Connection,
+                 message_queue: multiprocessing.connection.Connection,
                  returning_information_queue: multiprocessing.SimpleQueue,
                  exercise_id: int = 20):
         self.unprocessed_pdus: list[bytes] = []  # TODO maybe preload by splitting on line_divider?
@@ -114,8 +114,8 @@ class PlaybackLoggerFile:
         self.playback_speed = 1
         self.message_reduction_factor = 1
 
-        self.pdu_queue: multiprocessing.connection.PipeConnection = pdu_queue
-        self.message_queue: multiprocessing.connection.PipeConnection = message_queue
+        self.pdu_queue: multiprocessing.connection.Connection = pdu_queue
+        self.message_queue: multiprocessing.connection.Connection = message_queue
         self.returning_information_queue: multiprocessing.SimpleQueue = returning_information_queue
 
         self.load_logger(loggername)
