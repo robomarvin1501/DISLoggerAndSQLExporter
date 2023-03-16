@@ -198,11 +198,17 @@ class PlaybackLoggerFile:
                 print("seperator error")
 
     def move_position_to_time(self, requested_time: float):
+        need_to_unpause = False
+        if not self.paused and not self._message_stop_playback:
+            self.pause_playback()
+            need_to_unpause = True
         if requested_time > self._maximum_time:
             self.position_pointer = len(self.logger_pdus) - 1
             return None
         wanted_index = self._binary_search_for_time(requested_time, len(self.logger_pdus), 0)
         self.position_pointer = wanted_index
+        if need_to_unpause:
+            self.unpause_playback()
 
     def start_playback(self):
         if self.paused:
@@ -224,10 +230,12 @@ class PlaybackLoggerFile:
 
                         self._send(pdu)
                 else:
-                    # Wait to receive the end time
-                    while self.returning_information_queue.empty():
-                        time.sleep(0.1)
-                    self.move_position_to_time(self.returning_information_queue.get())
+                    # Waits to receive the end time because
+                    # multiprocesssing.SimpleQueue blocks until it receives from a get()
+                    end_time = self.returning_information_queue.get()
+                    if not self.paused:
+                        self.move_position_to_time(end_time)
+
 
                     # Make sure that the information queue is in fact empty
                     while not self.returning_information_queue.empty():
@@ -279,6 +287,8 @@ class PlaybackLoggerFile:
             time.sleep(0.1)
         self._message_stop_playback = False
         self.start_playback()
+        while not self.returning_information_queue.empty():
+            self.returning_information_queue.get()
 
     def set_playback_speed(self, playback_speed: float):
         self.playback_speed = playback_speed
