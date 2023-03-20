@@ -86,7 +86,7 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
             time.sleep(1)
 
 
-class PlaybackLoggerFile:
+class PlaybackLoggerFileManager:
     def __init__(self, loggername: str, pdu_queue: multiprocessing.connection.Connection,
                  message_queue: multiprocessing.connection.Connection,
                  returning_information_queue: multiprocessing.SimpleQueue,
@@ -236,12 +236,11 @@ class PlaybackLoggerFile:
                     if not self.paused:
                         self.move_position_to_time(end_time)
 
-
                     # Make sure that the information queue is in fact empty
                     while not self.returning_information_queue.empty():
                         self.returning_information_queue.get()
 
-                    self._message_stop_playback = False
+                    # self._message_stop_playback = False
                     for message in self._messages_awaiting:
                         message.cancel()
                     self._messages_awaiting = []
@@ -298,13 +297,50 @@ class PlaybackLoggerFile:
         self.message_queue.send(("skip_sleep", should_sleep))
 
 
+class PlaybackLoggerFile:
+    def __init__(self, logger_name: str, exercise_id: int):
+        self.logger_path = logger_name
+        self.pdu_receiver, self.pdu_sender = multiprocessing.Pipe()
+        self.message_receiver, self.message_sender = multiprocessing.Pipe()
+        self.returning_information_queue = multiprocessing.SimpleQueue()
+        self.playback_speed = 1
+
+        self.playback_manager = PlaybackLoggerFileManager(logger_name, self.pdu_sender, self.message_sender,
+                                                          self.returning_information_queue, exercise_id)
+
+        self.sender_process = threading.Thread(target=sender, args=(
+            self.pdu_receiver, self.message_receiver, self.returning_information_queue, 97), daemon=True)
+        self.sender_process.start()
+
+    def move(self, requested_time: float):
+        self.playback_manager.move_position_to_time(requested_time)
+
+    def play(self):
+        self.playback_manager.start_playback()
+
+    def stop(self):
+        self.playback_manager.stop_playback()
+
+    def pause(self):
+        self.playback_manager.pause_playback()
+
+    def unpause(self):
+        self.playback_manager.unpause_playback()
+
+    def status(self):
+        return self.playback_manager.logger_pdus[self.playback_manager.position_pointer][1]
+
+    def set_playback_speed(self, playback_speed: float):
+        self.playback_manager.set_playback_speed(playback_speed)
+
+
 if __name__ == "__main__":
     pdu_receiver, pdu_sender = multiprocessing.Pipe()
     message_receiver, message_sender = multiprocessing.Pipe()
     returning_information_queue = multiprocessing.SimpleQueue()
     playback = 1
 
-    plg = PlaybackLoggerFile("exp_1_2102_2.lzma", pdu_sender, message_sender, returning_information_queue, 97)
+    plg = PlaybackLoggerFileManager("exp_1_2102_2.lzma", pdu_sender, message_sender, returning_information_queue, 97)
     command = ""
     running_time = 0
     sender_process = multiprocessing.Process(target=sender,
