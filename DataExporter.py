@@ -10,6 +10,8 @@ from timeline import _Timeline
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QListWidgetItem
 
+from scipy.interpolate import interp1d
+
 
 class DataExporterElectricBoogaloo(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
     def __init__(self, parent=None):
@@ -78,9 +80,38 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.setupUi(self)
         self.make_timeline()
 
+        self.length_logger_file = 2000
+        self.position_mapper = interp1d([0, 100], [0, self.length_logger_file])
+        self.timeline_width = 100
+
     def make_timeline(self):
         self.TimeLine = _Timeline()
+        self.TimeLine.selected_mouse_position.connect(self._updated_position)
+        self.TimeLine.max_size.connect(self._changed_size)
+        self.TimeLine.current_mouse_position.connect(self._moved_mouse)
         self.verticalLayout.addWidget(self.TimeLine)
+
+    def _updated_position(self, x_pos: int):
+        if x_pos < 0:
+            x_pos = 0
+        elif x_pos > self.timeline_width:
+            x_pos = self.timeline_width
+        logger_position = self.position_mapper(x_pos)
+        print(f"Length of logger: {self.length_logger_file}")
+        print(f"From DET: {x_pos}, {logger_position}")
+        self.preciseTime.setText(f"Current: {logger_position:.2f}s | Length: {self.length_logger_file:.2f}s")
+
+    def _moved_mouse(self, x_pos: int):
+        if x_pos < 0:
+            x_pos = 0
+        elif x_pos > self.timeline_width:
+            x_pos = self.timeline_width
+        print(f"Moved mouse: {x_pos}")
+
+    def _changed_size(self, width: int):
+        print(f"New width: {width}")
+        self.timeline_width = width
+        self.position_mapper = interp1d([0, width], [0, self.length_logger_file])
 
 
 def main():
