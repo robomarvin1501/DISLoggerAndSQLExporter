@@ -22,7 +22,8 @@ class _Timeline(QtWidgets.QWidget):
         self._background_colour = QtGui.QColor("black")
         self._padding = 4.0
 
-        self.current_mouse_position_value = 0
+        self.current_mouse_position_ratio = 0
+        self.maximum_bar_value = 1
 
     def _trigger_refresh(self):
         self.update()
@@ -30,13 +31,13 @@ class _Timeline(QtWidgets.QWidget):
     def _calculate_clicked_position(self, e):
         parent = self.parent()
         click_x_position = e.x()
-        self.current_mouse_position_value = click_x_position
+        self.current_mouse_position_ratio = click_x_position / self.maximum_bar_value
         self.selected_mouse_position.emit(int(click_x_position))
 
     def _calculate_moved_position(self, e):
         parent = self.parent()
         moved_x_position = e.x()
-        self.current_mouse_position_value = moved_x_position
+        self.current_mouse_position_ratio = moved_x_position / self.maximum_bar_value
         self.current_mouse_position.emit(int(moved_x_position))
 
         self._trigger_refresh()
@@ -60,17 +61,21 @@ class _Timeline(QtWidgets.QWidget):
         painter.fillRect(rect, brush)
         # endregion
 
+        self.maximum_bar_value = painter.device().width()
+
         # region bar_position
         # Define canvas
         d_height = painter.device().height() - (self._padding * 2)
         d_width = painter.device().width() - (self._padding * 2)
+
+        actual_x_position = clamp(self.current_mouse_position_ratio * self.maximum_bar_value, 0, d_width)
 
         # Draw bar
         brush.setColor(QtGui.QColor("blue"))
         rect = QtCore.QRect(
             int(self._padding),
             int(self._padding),
-            int(clamp(self.current_mouse_position_value, 0, d_width)),
+            int(actual_x_position),
             int(d_height)
         )
         painter.fillRect(rect, brush)
