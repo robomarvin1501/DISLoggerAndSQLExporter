@@ -84,6 +84,8 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.position_mapper = interp1d([0, 100], [0, self.length_logger_file])
         self.timeline_width = 100
 
+        self._display_time(0)
+
     def make_timeline(self):
         self.TimeLine = _Timeline()
         self.TimeLine.selected_mouse_position.connect(self._updated_position)
@@ -91,15 +93,16 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.TimeLine.current_mouse_position.connect(self._moved_mouse)
         self.verticalLayout.addWidget(self.TimeLine)
 
+    def _display_time(self, position: float):
+        self.preciseTime.setText(f"Current: {position:.2f}s | Length: {self.length_logger_file:.2f}s")
+
     def _updated_position(self, x_pos: int):
         if x_pos < 0:
             x_pos = 0
         elif x_pos > self.timeline_width:
             x_pos = self.timeline_width
         logger_position = self.position_mapper(x_pos)
-        print(f"Length of logger: {self.length_logger_file}")
-        print(f"From DET: {x_pos}, {logger_position}")
-        self.preciseTime.setText(f"Current: {logger_position:.2f}s | Length: {self.length_logger_file:.2f}s")
+        self._display_time(logger_position)
 
     def _moved_mouse(self, x_pos: int):
         if x_pos < 0:
@@ -107,7 +110,7 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         elif x_pos > self.timeline_width:
             x_pos = self.timeline_width
         logger_position = self.position_mapper(x_pos)
-        self.preciseTime.setText(f"Current: {logger_position:.2f}s | Length: {self.length_logger_file:.2f}s")
+        self._display_time(logger_position)
 
     def _changed_size(self, width: int):
         self.timeline_width = width
