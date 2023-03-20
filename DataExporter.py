@@ -106,10 +106,10 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
             x_pos = 0
         elif x_pos > self.timeline_width:
             x_pos = self.timeline_width
-        print(f"Moved mouse: {x_pos}")
+        logger_position = self.position_mapper(x_pos)
+        self.preciseTime.setText(f"Current: {logger_position:.2f}s | Length: {self.length_logger_file:.2f}s")
 
     def _changed_size(self, width: int):
-        print(f"New width: {width}")
         self.timeline_width = width
         self.position_mapper = interp1d([0, width], [0, self.length_logger_file])
 
