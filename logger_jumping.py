@@ -269,6 +269,7 @@ class PlaybackLoggerFileManager:
         self.paused = True
 
         def paused_messages():
+            self._message_stop_playback = False
             while not self._message_stop_playback:
                 self._send_paused_locations()
                 time.sleep(0.5)
