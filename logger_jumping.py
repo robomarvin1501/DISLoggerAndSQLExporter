@@ -174,7 +174,7 @@ class PlaybackLoggerFileManager:
         self.pdu_queue.send(pdu)
 
     def load_logger(self, loggername: str):
-        with lzma.open(f"logs/{loggername}") as f:
+        with lzma.open(f"{loggername}") as f:
             print(f"Reading loggerfile: {loggername}")
             raw_data = f.read().split(b"line_separator")[:-1]
             print(f"Finished reading loggerfile: {loggername}")

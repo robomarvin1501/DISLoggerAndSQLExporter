@@ -1,90 +1,75 @@
-import threading
-import lzma
-import json
+import queue
 import sys
 
-from logger import DISReceiver, DataWriter
+from logger_jumping import PlaybackLoggerFile
 import DataExporterUi
 from timeline import _Timeline
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QListWidgetItem
+from PyQt5.QtWidgets import QApplication, QListWidgetItem, QFileDialog, QLabel
+from PyQt5.QtCore import QThread
 
 from scipy.interpolate import interp1d
 
 
-class DataExporterElectricBoogaloo(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
-    def __init__(self, parent=None):
-        super(DataExporterElectricBoogaloo, self).__init__(parent)
-        self.setupUi(self)
 
-        self.record_toggle_setup()
-        self.data_logger = threading.Thread(target=self.logger_thread, daemon=True)
-        self.current = 0
+class FileLoader(QThread):
+    def __init__(self, filepath: str, data_pipe_sender: queue.SimpleQueue):
+        super().__init__()
+        self._filepath = filepath
+        self._exercise_id = 97  # TODO set dynamically
+        self._data_pipe = data_pipe_sender
 
-    def record_toggle_setup(self):
-        self.record_toggle.clicked.connect(self.toggle_recording)
-
-    def print(self, s: str):
-        s_text = QListWidgetItem(s)
-        self.stdout_listwidget.addItem(s_text)
-
-    def toggle_recording(self):
-        if self.record_toggle.isChecked():
-            print("Recording")
-            self.print("Recording")
-            self.data_logger.start()
-        else:
-            print("Not recording")
-            self.print("Not recording")
-            self.data_logger = threading.Thread(target=self.logger_thread, daemon=True)
-
-    def logger_thread(self):
-        try:
-            with open("DataExporterConfig.json", 'r') as f:
-                config_data = json.load(f)
-        except FileNotFoundError:
-            self.print(r"""
-                ERROR: No configuration file
-                Please write a configuration file in the base folder by the name "DataExporterConfig.json"
-                For examples, see \\files\docs\DataExporter\DataExporterConfig.json
-            """)
-            sys.exit()
-
-        if config_data["logger_file"][-5:] != ".lzma":
-            config_data["logger_file"] += ".lzma"
-
-        lzc = lzma.LZMACompressor()
-
-        EXERCISE_ID = config_data["exercise_id"]
-        export = config_data["export_to_sql"]
-        logger_file = config_data["logger_file"]
-        db_name = config_data["database_name"]
-        new_db = config_data["new_database"]
-        with DataWriter(logger_file, "logs", lzc, output_writer=self.print) as writer:
-            with DISReceiver(3000, EXERCISE_ID, msg_len=16_384, output_writer=self.print) as r:
-                for (address, data, packettime, world_timestamp) in r:
-                    # NOTE floats are doubles in C, so use struct.unpack('d', packettime) on them
-                    # self.print(str(data))
-                    self.current += 1
-                    if self.current % 100 == 0:
-                        self.message_count.setText(str(self.current))
-                    writer.write(data, packettime, world_timestamp)
-                    if not self.record_toggle.isChecked():
-                        break
+    def run(self):
+        plg = PlaybackLoggerFile(self._filepath, self._exercise_id)
+        self._data_pipe.put(plg)
 
 
 class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
     def __init__(self, parent=None):
         super(DataExporterTester, self).__init__(parent)
         self.setupUi(self)
-        self.make_timeline()
 
-        self.length_logger_file = 2000
+        self.logger_file_name = ""
+        self.actionOpenFile.triggered.connect(self._choose_file)
+
+        self.length_logger_file = 0
         self.position_mapper = interp1d([0, 100], [0, self.length_logger_file])
         self.timeline_width = 100
 
+        self.play_back_loggerfile: PlaybackLoggerFile = None
+        self._data_channel = queue.SimpleQueue()
+
         self._display_time(0)
+
+    def _loading_finished(self):
+        self.play_back_loggerfile: PlaybackLoggerFile = self._data_channel.get()
+        del self.loader
+        self.make_timeline()
+        self.length_logger_file = self.play_back_loggerfile.playback_manager.logger_pdus[-1][1]
+        self._display_time(0)
+
+        self._connect_ui()
+
+    def _connect_ui(self):
+        self.buttonPlay.clicked.connect(self._play)
+        self.buttonStop.clicked.connect(self._stop)
+        self.buttonPause.clicked.connect(self._pause)
+
+    def _play(self):
+        self.buttonPlay.setDisabled(True)
+        self.buttonStop.setDisabled(False)
+        self.buttonPause.setDisabled(False)
+
+    def _stop(self):
+        self.buttonPlay.setDisabled(False)
+        self.buttonStop.setDisabled(True)
+        self.buttonPause.setDisabled(True)
+
+    def _pause(self):
+        self.buttonPlay.setDisabled(False)
+        self.buttonStop.setDisabled(False)
+        self.buttonPause.setDisabled(True)
 
     def make_timeline(self):
         self.TimeLine = _Timeline()
@@ -92,6 +77,26 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.TimeLine.max_size.connect(self._changed_size)
         self.TimeLine.current_mouse_position.connect(self._moved_mouse)
         self.verticalLayout.addWidget(self.TimeLine)
+
+    def _choose_file(self):
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.AnyFile)
+        # dlg.setFilter("LZMA files (*.lzma)")
+        # TODO get the length of the logger from the logger, connect frontend to backend
+
+        if dlg.exec_():
+            filenames = dlg.selectedFiles()
+            if len(filenames) < 1:
+                print("No file selected")
+                return ""
+            elif len(filenames) > 1:
+                print("You selected more than one file, the first will be loaded")
+            self.logger_file_name = filenames[0]
+            self.preciseTime.setText(f"Loading: {filenames[0]}")
+
+            self.loader = FileLoader(self.logger_file_name, self._data_channel)
+            self.loader.finished.connect(self._loading_finished)
+            self.loader.start()
 
     def _display_time(self, position: float):
         self.preciseTime.setText(f"Current: {position:.2f}s | Length: {self.length_logger_file:.2f}s")

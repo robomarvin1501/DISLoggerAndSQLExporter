@@ -61,9 +61,9 @@ class Ui_MainWindow(object):
         self.statusBar = QtWidgets.QStatusBar(MainWindow)
         self.statusBar.setObjectName("statusBar")
         MainWindow.setStatusBar(self.statusBar)
-        self.actionOpen = QtWidgets.QAction(MainWindow)
-        self.actionOpen.setObjectName("actionOpen")
-        self.menuFile.addAction(self.actionOpen)
+        self.actionOpenFile = QtWidgets.QAction(MainWindow)
+        self.actionOpenFile.setObjectName("actionOpenFile")
+        self.menuFile.addAction(self.actionOpenFile)
         self.menubar.addAction(self.menuFile.menuAction())
 
         self.retranslateUi(MainWindow)
@@ -80,5 +80,5 @@ class Ui_MainWindow(object):
         self.buttonIncreaseSpeed.setText(_translate("MainWindow", "Increase speed"))
         self.preciseTime.setText(_translate("MainWindow", "TextLabel"))
         self.menuFile.setTitle(_translate("MainWindow", "File"))
-        self.actionOpen.setText(_translate("MainWindow", "Open"))
+        self.actionOpenFile.setText(_translate("MainWindow", "Open"))
 
