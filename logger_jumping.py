@@ -107,6 +107,7 @@ class PlaybackLoggerFileManager:
         self._messages_awaiting = []
 
         self._maximum_time = 0
+        self.stop_time = datetime.datetime.now().timestamp()
 
         self.state_cache: dict[bytes, bytes] = dict()
         self.paused = False
@@ -233,9 +234,11 @@ class PlaybackLoggerFileManager:
                     # Waits to receive the end time because
                     # multiprocesssing.SimpleQueue blocks until it receives from a get()
                     end_time = self.returning_information_queue.get()
-                    if not self.paused:
-                        self.move_position_to_time(end_time)
+                    # if not self.paused:
+                    # When paused, the current pointer logger does not get moved
+                    self.move_position_to_time(end_time)
 
+                    self.stop_time = datetime.datetime.now().timestamp()
                     # Make sure that the information queue is in fact empty
                     while not self.returning_information_queue.empty():
                         self.returning_information_queue.get()
