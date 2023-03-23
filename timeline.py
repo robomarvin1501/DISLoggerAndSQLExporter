@@ -28,16 +28,19 @@ class _Timeline(QtWidgets.QWidget):
     def _trigger_refresh(self):
         self.update()
 
+    def _calculate_mouse(self, x):
+        self.current_mouse_position_ratio = x / self.maximum_bar_value
+
     def _calculate_clicked_position(self, e):
         parent = self.parent()
         click_x_position = e.x()
-        self.current_mouse_position_ratio = click_x_position / self.maximum_bar_value
+        self._calculate_mouse(click_x_position)
         self.selected_mouse_position.emit(int(click_x_position))
 
     def _calculate_moved_position(self, e):
         parent = self.parent()
         moved_x_position = e.x()
-        self.current_mouse_position_ratio = moved_x_position / self.maximum_bar_value
+        self._calculate_mouse(moved_x_position)
         self.current_mouse_position.emit(int(moved_x_position))
 
         self._trigger_refresh()

@@ -25,21 +25,21 @@
         <item>
          <widget class="QPushButton" name="buttonPlay">
           <property name="text">
-           <string>Play</string>
+           <string>&amp;Play</string>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QPushButton" name="buttonStop">
           <property name="text">
-           <string>Stop</string>
+           <string>&amp;Stop</string>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QPushButton" name="buttonPause">
           <property name="text">
-           <string>Pause</string>
+           <string>P&amp;ause</string>
           </property>
          </widget>
         </item>
@@ -53,7 +53,7 @@
         <item>
          <widget class="QPushButton" name="buttonDecreaseSpeed">
           <property name="text">
-           <string>Decrease speed</string>
+           <string>&amp;Decrease speed</string>
           </property>
          </widget>
         </item>
@@ -67,7 +67,7 @@
         <item>
          <widget class="QPushButton" name="buttonIncreaseSpeed">
           <property name="text">
-           <string>Increase speed</string>
+           <string>&amp;Increase speed</string>
           </property>
          </widget>
         </item>
@@ -95,7 +95,7 @@
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>File</string>
+     <string>&amp;File</string>
     </property>
     <addaction name="actionOpenFile"/>
    </widget>
@@ -104,7 +104,7 @@
   <widget class="QStatusBar" name="statusBar"/>
   <action name="actionOpenFile">
    <property name="text">
-    <string>Open</string>
+    <string>&amp;Open</string>
    </property>
   </action>
  </widget>

@@ -72,13 +72,13 @@ class Ui_MainWindow(object):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
-        self.buttonPlay.setText(_translate("MainWindow", "Play"))
-        self.buttonStop.setText(_translate("MainWindow", "Stop"))
-        self.buttonPause.setText(_translate("MainWindow", "Pause"))
-        self.buttonDecreaseSpeed.setText(_translate("MainWindow", "Decrease speed"))
+        self.buttonPlay.setText(_translate("MainWindow", "&Play"))
+        self.buttonStop.setText(_translate("MainWindow", "&Stop"))
+        self.buttonPause.setText(_translate("MainWindow", "P&ause"))
+        self.buttonDecreaseSpeed.setText(_translate("MainWindow", "&Decrease speed"))
         self.labelPlaybackSpeed.setText(_translate("MainWindow", "1.0x"))
-        self.buttonIncreaseSpeed.setText(_translate("MainWindow", "Increase speed"))
+        self.buttonIncreaseSpeed.setText(_translate("MainWindow", "&Increase speed"))
         self.preciseTime.setText(_translate("MainWindow", "TextLabel"))
-        self.menuFile.setTitle(_translate("MainWindow", "File"))
-        self.actionOpenFile.setText(_translate("MainWindow", "Open"))
+        self.menuFile.setTitle(_translate("MainWindow", "&File"))
+        self.actionOpenFile.setText(_translate("MainWindow", "&Open"))
 

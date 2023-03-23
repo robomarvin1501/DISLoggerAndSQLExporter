@@ -1,16 +1,18 @@
+import datetime
 import queue
 import sys
+import time
 
 from logger_jumping import PlaybackLoggerFile
 import DataExporterUi
 from timeline import _Timeline
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QListWidgetItem, QFileDialog, QLabel
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QApplication, QListWidgetItem, QFileDialog, QLabel, QShortcut
 from PyQt5.QtCore import QThread
 
 from scipy.interpolate import interp1d
-
 
 
 class FileLoader(QThread):
@@ -34,13 +36,16 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.actionOpenFile.triggered.connect(self._choose_file)
 
         self.length_logger_file = 0
+        # maps the timeline position to the time in the logger file
         self.position_mapper = interp1d([0, 100], [0, self.length_logger_file])
+        self.time_mapper = interp1d([0, self.length_logger_file], [0, 100])
         self.timeline_width = 100
 
         self.play_back_loggerfile: PlaybackLoggerFile = None
         self._data_channel = queue.SimpleQueue()
 
         self._display_time(0)
+        self._setup_shortcuts()
 
     def _loading_finished(self):
         self.play_back_loggerfile: PlaybackLoggerFile = self._data_channel.get()
@@ -56,20 +61,45 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonStop.clicked.connect(self._stop)
         self.buttonPause.clicked.connect(self._pause)
 
+    def _setup_shortcuts(self):
+        self.shortcut_open = QShortcut(QKeySequence("Ctrl+O"), self)
+        self.shortcut_open.activated.connect(self._choose_file)
+
     def _play(self):
         self.buttonPlay.setDisabled(True)
         self.buttonStop.setDisabled(False)
         self.buttonPause.setDisabled(False)
 
+        self.play_back_loggerfile.play()
+
     def _stop(self):
+        stopped_playback = datetime.datetime.now().timestamp()
         self.buttonPlay.setDisabled(False)
         self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
 
+        time.sleep(0.3)
+        self.play_back_loggerfile.stop()
+        self._set_timeline_position(stopped_playback)
+
     def _pause(self):
+        stopped_playback = datetime.datetime.now().timestamp()
         self.buttonPlay.setDisabled(False)
-        self.buttonStop.setDisabled(False)
+        self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
+
+        self.play_back_loggerfile.pause()
+        self._set_timeline_position(stopped_playback)
+
+    def _set_timeline_position(self, stopped_playback_time: float):
+        while stopped_playback_time > self.play_back_loggerfile.playback_manager.stop_time:
+            time.sleep(0.1)
+        # TODO need a better way of getting the current time
+        current_time = self.play_back_loggerfile.playback_manager.logger_pdus[
+            self.play_back_loggerfile.playback_manager.position_pointer][1]
+        print(current_time)
+        self.change_position_by_time(current_time)
+        self.TimeLine._trigger_refresh()
 
     def make_timeline(self):
         self.TimeLine = _Timeline()
@@ -81,8 +111,6 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
     def _choose_file(self):
         dlg = QFileDialog()
         dlg.setFileMode(QFileDialog.AnyFile)
-        # dlg.setFilter("LZMA files (*.lzma)")
-        # TODO get the length of the logger from the logger, connect frontend to backend
 
         if dlg.exec_():
             filenames = dlg.selectedFiles()
@@ -101,6 +129,13 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
     def _display_time(self, position: float):
         self.preciseTime.setText(f"Current: {position:.2f}s | Length: {self.length_logger_file:.2f}s")
 
+    def change_position_by_time(self, time: float):
+        timeline_position = self.time_mapper(time)
+        self.TimeLine._calculate_mouse(timeline_position)
+        # Not using updated position because this also moves the play_back_loggerfile
+        # TODO combine updated_position and moved_mouse into one function with a boolean flag for movng the logger
+        self._moved_mouse(timeline_position)
+
     def _updated_position(self, x_pos: int):
         if x_pos < 0:
             x_pos = 0
@@ -108,6 +143,7 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
             x_pos = self.timeline_width
         logger_position = self.position_mapper(x_pos)
         self._display_time(logger_position)
+        self.play_back_loggerfile.move(logger_position)
 
     def _moved_mouse(self, x_pos: int):
         if x_pos < 0:
@@ -120,6 +156,7 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
     def _changed_size(self, width: int):
         self.timeline_width = width
         self.position_mapper = interp1d([0, width], [0, self.length_logger_file])
+        self.time_mapper = interp1d([0, self.length_logger_file], [0, width])
 
 
 def main():
