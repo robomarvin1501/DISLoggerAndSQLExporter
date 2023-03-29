@@ -10,7 +10,7 @@ from timeline import _Timeline
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QApplication, QListWidgetItem, QFileDialog, QLabel, QShortcut
-from PyQt5.QtCore import QThread
+from PyQt5.QtCore import QThread, QTimer
 
 from scipy.interpolate import interp1d
 
@@ -44,6 +44,12 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.play_back_loggerfile: PlaybackLoggerFile = None
         self._data_channel = queue.SimpleQueue()
 
+        self._starting_worldtime = 0
+        self._starting_packettime = 0
+        self._approximate_current_packettime = 0
+        self._change_playback_position_timer = QTimer()
+        self._change_playback_position_timer.timeout.connect(self._timer_timeout)
+
         self._display_time(0)
         self._setup_shortcuts()
 
@@ -55,6 +61,17 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self._display_time(0)
 
         self._connect_ui()
+
+    def _timer_timeout(self):
+        if self._approximate_current_packettime >= self.play_back_loggerfile.playback_manager._maximum_time - 0.5:
+            self._stop()
+        self._approximate_current_packettime += self._change_playback_position_timer.interval() / 1000
+
+        timeline_position = self.time_mapper(self._approximate_current_packettime)
+        self.TimeLine._calculate_mouse(timeline_position)
+        self.TimeLine._trigger_refresh()
+
+        self.change_position_by_time(self._approximate_current_packettime)
 
     def _connect_ui(self):
         self.buttonPlay.clicked.connect(self._play)
@@ -71,6 +88,7 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonPause.setDisabled(False)
 
         self.play_back_loggerfile.play()
+        self._change_playback_position_timer.start(10)
 
     def _stop(self):
         stopped_playback = datetime.datetime.now().timestamp()
@@ -82,6 +100,8 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.play_back_loggerfile.stop()
         self._set_timeline_position(stopped_playback)
 
+        self._change_playback_position_timer.stop()
+
     def _pause(self):
         stopped_playback = datetime.datetime.now().timestamp()
         self.buttonPlay.setDisabled(False)
@@ -90,6 +110,8 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
         self.play_back_loggerfile.pause()
         self._set_timeline_position(stopped_playback)
+
+        self._change_playback_position_timer.stop()
 
     def _set_timeline_position(self, stopped_playback_time: float):
         while stopped_playback_time > self.play_back_loggerfile.playback_manager.stop_time:
@@ -142,7 +164,9 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         elif x_pos > self.timeline_width:
             x_pos = self.timeline_width
         logger_position = self.position_mapper(x_pos)
+        self._approximate_current_packettime = logger_position
         self._display_time(logger_position)
+        self.play_back_loggerfile.playback_manager.remove_all_entities()
         self.play_back_loggerfile.move(logger_position)
 
     def _moved_mouse(self, x_pos: int):
@@ -151,6 +175,7 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         elif x_pos > self.timeline_width:
             x_pos = self.timeline_width
         logger_position = self.position_mapper(x_pos)
+        self._approximate_current_packettime = logger_position
         self._display_time(logger_position)
 
     def _changed_size(self, width: int):

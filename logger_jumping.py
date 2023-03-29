@@ -230,6 +230,8 @@ class PlaybackLoggerFileManager:
                             self.state_cache[pdu[0][12:18]] = adjusted_velocity_pdu
 
                         self._send(pdu)
+                    if n == len(pdus) - 5:
+                        self.stop_playback()
                 else:
                     # Waits to receive the end time because
                     # multiprocesssing.SimpleQueue blocks until it receives from a get()
@@ -246,6 +248,10 @@ class PlaybackLoggerFileManager:
                     # self._message_stop_playback = False
                     for message in self._messages_awaiting:
                         message.cancel()
+
+                    if not self.paused:
+                        self.remove_all_entities()
+
                     self._messages_awaiting = []
                     return None
 
@@ -257,18 +263,34 @@ class PlaybackLoggerFileManager:
             self.playback_thread = threading.Thread(target=playback, daemon=True)
             self.playback_thread.start()
 
-    def stop_playback(self):
+    def stop_playback(self, pause=False):
         self._message_stop_playback = True
-        self._send_paused_locations()
+
+        if not pause:
+            self.remove_all_entities()
         if self.playback_thread.is_alive():
             self.message_queue.send(("stop",))
+
+    def remove_all_entities(self):
+        for e in self.state_cache:
+            data = bytearray(self.state_cache[e])
+            # appearance is 84-87 inclusive
+            appearance = bin(struct.unpack('>I', data[84:88])[0])[2:].zfill(32)  # 8th needs changing to 1
+            appearance_l = list(appearance)
+            appearance_l[8] = '1'
+            appearance = ''.join(appearance_l)
+            appearance_bytes = struct.pack(">I", int(appearance, 2))
+
+            data[84:88] = appearance_bytes
+
+            self._send((data, 0))
 
     def _send_paused_locations(self):
         for pdu in self.state_cache:
             self._send((self.state_cache[pdu], 0))
 
     def pause_playback(self):
-        self.stop_playback()
+        self.stop_playback(pause=True)
         self.paused = True
 
         def paused_messages():
@@ -344,7 +366,7 @@ if __name__ == "__main__":
     returning_information_queue = multiprocessing.SimpleQueue()
     playback = 1
 
-    plg = PlaybackLoggerFileManager("exp_1_2102_2.lzma", pdu_sender, message_sender, returning_information_queue, 97)
+    plg = PlaybackLoggerFileManager("logs/exp_1_2102_2.lzma", pdu_sender, message_sender, returning_information_queue, 97)
     command = ""
     running_time = 0
     sender_process = multiprocessing.Process(target=sender,
