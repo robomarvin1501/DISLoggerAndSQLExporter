@@ -329,7 +329,6 @@ class PlaybackLoggerFile:
         self.pdu_receiver, self.pdu_sender = multiprocessing.Pipe()
         self.message_receiver, self.message_sender = multiprocessing.Pipe()
         self.returning_information_queue = multiprocessing.SimpleQueue()
-        self.playback_speed = 1
 
         self.playback_manager = PlaybackLoggerFileManager(logger_name, self.pdu_sender, self.message_sender,
                                                           self.returning_information_queue, exercise_id)

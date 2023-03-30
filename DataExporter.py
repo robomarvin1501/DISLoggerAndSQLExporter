@@ -53,6 +53,14 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self._display_time(0)
         self._setup_shortcuts()
 
+        self.playback_speed = 1
+
+        self.buttonPlay.setDisabled(True)
+        self.buttonStop.setDisabled(True)
+        self.buttonPause.setDisabled(True)
+        self.buttonIncreaseSpeed.setDisabled(True)
+        self.buttonDecreaseSpeed.setDisabled(True)
+
     def _loading_finished(self):
         self.play_back_loggerfile: PlaybackLoggerFile = self._data_channel.get()
         del self.loader
@@ -61,6 +69,11 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self._display_time(0)
 
         self._connect_ui()
+
+        self.buttonPlay.setDisabled(False)
+        self.buttonStop.setDisabled(True)
+        self.buttonPause.setDisabled(True)
+        self.buttonIncreaseSpeed.setDisabled(False)
 
     def _timer_timeout(self):
         if self._approximate_current_packettime >= self.play_back_loggerfile.playback_manager._maximum_time - 0.5:
@@ -77,6 +90,9 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonPlay.clicked.connect(self._play)
         self.buttonStop.clicked.connect(self._stop)
         self.buttonPause.clicked.connect(self._pause)
+
+        self.buttonIncreaseSpeed.clicked.connect(self._increase_speed)
+        self.buttonDecreaseSpeed.clicked.connect(self._decrease_speed)
 
     def _setup_shortcuts(self):
         self.shortcut_open = QShortcut(QKeySequence("Ctrl+O"), self)
@@ -112,6 +128,30 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self._set_timeline_position(stopped_playback)
 
         self._change_playback_position_timer.stop()
+
+    def _increase_speed(self):
+        if self.playback_speed == 5:
+            self.buttonIncreaseSpeed.setDisabled(True)
+            return
+        elif self.playback_speed == 4:
+            self.buttonIncreaseSpeed.setDisabled(True)
+        self.buttonDecreaseSpeed.setDisabled(False)
+        self.playback_speed += 1
+        self.play_back_loggerfile.set_playback_speed(self.playback_speed)
+        self.labelPlaybackSpeed.setText(str(self.playback_speed) + ".0x")
+        self.update()
+
+    def _decrease_speed(self):
+        if self.playback_speed == 1:
+            self.buttonDecreaseSpeed.setDisabled(True)
+            return
+        elif self.playback_speed == 2:
+            self.buttonDecreaseSpeed.setDisabled(True)
+        self.buttonIncreaseSpeed.setDisabled(False)
+        self.playback_speed -= 1
+        self.play_back_loggerfile.set_playback_speed(self.playback_speed)
+        self.labelPlaybackSpeed.setText(str(self.playback_speed) + ".0x")
+        self.update()
 
     def _set_timeline_position(self, stopped_playback_time: float):
         while stopped_playback_time > self.play_back_loggerfile.playback_manager.stop_time:

@@ -71,7 +71,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "DataExporter - Player"))
         self.buttonPlay.setText(_translate("MainWindow", "&Play"))
         self.buttonStop.setText(_translate("MainWindow", "&Stop"))
         self.buttonPause.setText(_translate("MainWindow", "P&ause"))
