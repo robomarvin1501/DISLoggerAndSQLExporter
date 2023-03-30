@@ -78,7 +78,7 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
     def _timer_timeout(self):
         if self._approximate_current_packettime >= self.play_back_loggerfile.playback_manager._maximum_time - 0.5:
             self._stop()
-        self._approximate_current_packettime += self._change_playback_position_timer.interval() / 1000
+        self._approximate_current_packettime += self._change_playback_position_timer.interval() * self.playback_speed / 1000
 
         timeline_position = self.time_mapper(self._approximate_current_packettime)
         self.TimeLine._calculate_mouse(timeline_position)
