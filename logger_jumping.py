@@ -219,6 +219,7 @@ class PlaybackLoggerFileManager:
 
         def playback():
             pdus = self.logger_pdus[self.position_pointer:]
+            self.state_cache.clear()
 
             for n, pdu in enumerate(pdus):
                 if not self._message_stop_playback:
