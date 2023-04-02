@@ -52,7 +52,7 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
                 last_executed_time = 0
             elif message[0] == "starting_timestamp":
                 starting_timestamp = message[1]
-                starting_message_packettime = message[2]
+                starting_message_packettime = message[2] / playback_modifier
             elif message[0] == "playback":
                 playback_modifier = message[1]
             elif message[0] == "skip_sleep":
@@ -256,6 +256,8 @@ class PlaybackLoggerFileManager:
                     self._messages_awaiting = []
                     return None
 
+        while self.pdu_queue.poll():
+            self.pdu_queue.recv()
         self.starting_timestamp = datetime.datetime.now().timestamp()
         self.message_queue.send(
             ("starting_timestamp", self.starting_timestamp, self.logger_pdus[self.position_pointer][1]))
@@ -396,6 +398,10 @@ if __name__ == "__main__":
             print(f"Real running time: {running_time}")
         elif split_commands[0] == "pause":
             plg.pause_playback()
+            running_time = time.perf_counter() - running_time
+            print(
+                f"Current pdu: {plg.position_pointer}, current time: {plg.logger_pdus[plg.position_pointer][1]}")
+            print(f"Real running time: {running_time}")
         elif split_commands[0] == "unpause":
             plg.unpause_playback()
         elif split_commands[0] == "show" or split_commands[0] == "status":
