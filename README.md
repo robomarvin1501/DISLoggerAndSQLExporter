@@ -7,7 +7,7 @@ This code was created by ***REMOVED***, with version 1.0 being released on 2022.
 The purpose is to provide logging of a simulation, following the DIS standard, and to replace the logger from MAK, and the LoggerSQLExporter created to export said files.  
 ----------------------------
 
-##Starting a new experiment
+## Starting a new experiment
 I shall take you through this procedure, to grant you the knowledge of with what you are dealing, and how to do so.
 
 1. DataExporterConfig.json
@@ -20,20 +20,20 @@ I shall take you through this procedure, to grant you the knowledge of with what
 4. You may now run logger.exe or the DataExporter
 
 ----------------------------
-##Using logger.exe
+## Using logger.exe
 When using the logger, one simply runs it and waits.  
 To stop it, one clicks within the window, presses CTRL+c, and waits. The window will close itself.
 
 ----------------------------
 
-##Building logger.exe
+## Building logger.exe
 In order to build a distributable exe, one simply runs build_exe.py. Hopefully this will not need to be done regularly.  
 build_exe.py makes use of PyInstaller, which can be a pain in the backside. If it no longer builds, and you don't know why, I wish you luck. It took me most of a day before it built for the first time.
 
 ----------------------------
-#Overall explanation
+# Overall explanation
 
-##logger.py
+## logger.py
 The logger.py file is home to two classes, `DISReceiver`, and `DataWriter`.  
 These should be used with the python `with` statement.  
 
@@ -41,7 +41,7 @@ These should be used with the python `with` statement.
 `DataWriter` was designed this way to ensure that no matter what, the file and ports will be properly closed when you are done with them.  
 
 
-##LoggerSQLExporter.py
+## LoggerSQLExporter.py
 This file is home to 4 classes: `Exporter`, `LoggerPDU`, `EventReportInterpreter`, and `LoggerSQLExporter`.  
 `Exporter`: This class has numerous generated instances throughout the code. An instance is generated for every table to which data is being exported, and it dumps the data it receives to that table on a seperate thread from the main thread.  
 `LoggerPDU`: This is a wrapper on all the PDU classes from the opendis library. It adds the necessary fields of `packet_time` and `world_time`.  
@@ -50,7 +50,7 @@ This file is home to 4 classes: `Exporter`, `LoggerPDU`, `EventReportInterpreter
 
 ----------------------------
 
-##Necessary directories
+## Necessary directories
 `***REMOVED***` houses the code that creates encoders based off what is found in ***REMOVED***. It also houses the `GeneralStructs.csv` file, for building such things.     
 `encoders` houses the encoders that have been generated.  
 `logs` These are the generated logs by the logger.
