@@ -327,7 +327,15 @@ class PlaybackLoggerFileManager:
 
 
 class PlaybackLoggerFile:
+    """
+    This class provides easy control of the PlaybackLoggerFileManager
+    It exists for connecting to the API, and for the GUI
+    """
     def __init__(self, logger_name: str, exercise_id: int):
+        """
+        :param logger_name: str : absolute path to the lzma logger file that you want to load
+        :param exercise_id: int : exercise id upon which you wish to play back
+        """
         self.logger_path = logger_name
         self.pdu_receiver, self.pdu_sender = multiprocessing.Pipe()
         self.message_receiver, self.message_sender = multiprocessing.Pipe()
@@ -340,28 +348,64 @@ class PlaybackLoggerFile:
             self.pdu_receiver, self.message_receiver, self.returning_information_queue, exercise_id), daemon=True)
         self.sender_process.start()
 
-    def move(self, requested_time: float):
+    def move(self, requested_time: float) -> None:
+        """
+        Moves the logger to the requested time. Can be used during playback
+        :param requested_time: float
+        :return: None
+        """
         self.playback_manager.move_position_to_time(requested_time)
 
-    def play(self):
+    def play(self) -> None:
+        """
+        Starts the playback of the loggerfile, or unpauses playback
+        :return: None
+        """
         self.playback_manager.start_playback()
 
-    def stop(self):
+    def stop(self) -> None:
+        """
+        Stops playback, and deletes entities from the game world
+        :return: None
+        """
         self.playback_manager.stop_playback()
 
-    def pause(self):
+    def pause(self) -> None:
+        """
+        Pauses playback. This means that the entities are still visible in the game world, they're just not moving
+        :return: None
+        """
         self.playback_manager.pause_playback()
 
-    def unpause(self):
+    def unpause(self) -> None:
+        """
+        Restarts playback when paused. A Little deprecated since play can also do this now.
+        :return: None
+        """
         self.playback_manager.unpause_playback()
 
-    def status(self):
+    def status(self) -> float:
+        """
+        Returns the PacketTime of the current pdu
+        :return: float
+        """
         return self.playback_manager.logger_pdus[self.playback_manager.position_pointer][1]
 
-    def set_playback_speed(self, playback_speed: float):
+    def set_playback_speed(self, playback_speed: float) -> None:
+        """
+        Sets the playback speed, faster than 10 doesn't really world too well, but I see very little reason to try
+        and optimise that.
+        :param playback_speed: float
+        :return: None
+        """
         self.playback_manager.set_playback_speed(playback_speed)
 
-    def set_exercise_id(self, exercise_id: int):
+    def set_exercise_id(self, exercise_id: int) -> None:
+        """
+        Sets the exercise ID. CANNOT be set while playing back.
+        :param exercise_id: int
+        :return: None
+        """
         self.playback_manager.message_queue.send(("exit",))
         while self.sender_process.is_alive():
             time.sleep(0.05)
