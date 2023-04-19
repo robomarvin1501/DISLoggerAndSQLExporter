@@ -87,27 +87,8 @@ class _Timeline(QtWidgets.QWidget):
         painter.end()
 
 
-class TimeLineGreater(QtWidgets.QWidget):
-    def __init__(self, *args, **kwargs):
-        super(TimeLineGreater, self).__init__(*args, **kwargs)
-
-        layout = QtWidgets.QVBoxLayout()
-        self._timeline = _Timeline()
-        self._timeline.clickedValue.connect(self._updated_position)
-        layout.addWidget(self._timeline)
-
-        self.label = QtWidgets.QLabel()
-        self.label.setText("Hello world")
-        layout.addWidget(self.label)
-
-        self.setLayout(layout)
-
-    def _updated_position(self, x_pos: int):
-        print(f"From DET: {x_pos}")
-
-
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
-    tlg = TimeLineGreater()
+    tlg = _Timeline()
     tlg.show()
     app.exec_()
