@@ -91,7 +91,7 @@ class PlaybackLoggerFileManager:
                  message_queue: multiprocessing.connection.Connection,
                  returning_information_queue: multiprocessing.SimpleQueue,
                  exercise_id: int = 20):
-        self.unprocessed_pdus: list[bytes] = []  # TODO maybe preload by splitting on line_divider?
+        self.unprocessed_pdus: list[bytes] = []
         self.logger_pdus: list[tuple[bytes, float]] = []
         self.position_pointer = 0
         self.starting_timestamp = 0
