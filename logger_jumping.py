@@ -16,6 +16,14 @@ logging.basicConfig(filename="jumping.log", encoding="utf8", filemode="w", level
 def sender(pdu_queue: multiprocessing.connection.PipeConnection,
            message_queue: multiprocessing.connection.PipeConnection,
            returning_information_queue: multiprocessing.SimpleQueue, exercise_id: int):
+    """
+    This function is run in a separate thread or process, and handles the sending of the PDUs to the network.
+    :param pdu_queue:                   multiprocessing.connection.PipeConnection   : Pipe through which PDUs arrive
+    :param message_queue:               multiprocessing.connection.PipeConnection   : Pipe through which messages arrive
+    :param returning_information_queue: multiprocessing.SimpleQueue                 : SimpleQueue for returning messages
+    :param exercise_id: int
+    :return: None
+    """
     UDP_PORT = 3000
     DESTINATION_ADDRESS = "192.133.255.255"
 
@@ -29,7 +37,12 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
 
     playback_modifier = 1
 
-    def send(pdu: bytes):
+    def send(pdu: bytes) -> None:
+        """
+        Sends PDU bytes over broadcast across the network
+        :param pdu: bytes
+        :return: None
+        """
         pdu_to_send = bytearray(pdu)
 
         pdu_to_send[1] = exercise_id
@@ -44,6 +57,7 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
             usages += 1
             message = message_queue.recv()
             if message[0] == "stop":
+                # Get the last PDUs from the queue, send back the PacketTime of the last message
                 while pdu_queue.poll():
                     pdu_queue.recv()
                 logging.debug(f"{messages_not_slept} messages not slept")
@@ -51,6 +65,7 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
                 returning_information_queue.put(last_executed_time)
                 last_executed_time = 0
             elif message[0] == "starting_timestamp":
+                # Get the PacketTime of the first message to be sent, and modify according to the playback speed
                 starting_timestamp = message[1]
                 starting_message_packettime = message[2] / playback_modifier
             elif message[0] == "playback":
@@ -63,11 +78,14 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
             usages += 1
             pdu = pdu_queue.recv()
 
+            # Figure out how long the thread should wait before sending this PDU to the network, so it is sent at
+            # the right time according to its PacketTime, and the playback speed
             current_timestamp = datetime.datetime.now().timestamp()
             play_time = current_timestamp - starting_timestamp
             in_world_play_time = starting_message_packettime + play_time
             delay = (pdu[1] / playback_modifier) - in_world_play_time
 
+            # Honestly, a delay of < 0.1s is small enough to not be worried about.
             if delay >= 0.1 and not skip_sleep:
                 time.sleep(delay)
                 logging.debug(f"{messages_not_slept} messages not slept")
