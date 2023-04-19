@@ -54,7 +54,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self._setup_shortcuts()
 
         self.playback_speed = 1
-        self.exercise_id = 97
+        self.exercise_id = int(self.spinBoxExerciseId.text())
 
         self.buttonPlay.setDisabled(True)
         self.buttonStop.setDisabled(True)
