@@ -27,5 +27,3 @@ Files overview
 - timeline.py
   - Provides the _Timeline class, for a (slightly) prettier GUI specifying where in the timeline playback is currently.
 
-Using the GUI
-======

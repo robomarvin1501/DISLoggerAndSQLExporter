@@ -16,10 +16,10 @@ from scipy.interpolate import interp1d
 
 
 class FileLoader(QThread):
-    def __init__(self, filepath: str, data_pipe_sender: queue.SimpleQueue):
+    def __init__(self, filepath: str, exercise_id: int, data_pipe_sender: queue.SimpleQueue):
         super().__init__()
         self._filepath = filepath
-        self._exercise_id = 97  # TODO set dynamically
+        self._exercise_id = exercise_id
         self._data_pipe = data_pipe_sender
 
     def run(self):
@@ -27,9 +27,9 @@ class FileLoader(QThread):
         self._data_pipe.put(plg)
 
 
-class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
+class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
     def __init__(self, parent=None):
-        super(DataExporterTester, self).__init__(parent)
+        super(DataExporter, self).__init__(parent)
         self.setupUi(self)
 
         self.logger_file_name = ""
@@ -54,12 +54,17 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self._setup_shortcuts()
 
         self.playback_speed = 1
+        self.exercise_id = 97
 
         self.buttonPlay.setDisabled(True)
         self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
         self.buttonIncreaseSpeed.setDisabled(True)
         self.buttonDecreaseSpeed.setDisabled(True)
+
+        self.buttonConnect.setDisabled(True)
+        self.buttonDisconnect.setDisabled(True)
+        self.spinBoxExerciseId.setDisabled(True)
 
     def _loading_finished(self):
         self.play_back_loggerfile: PlaybackLoggerFile = self._data_channel.get()
@@ -74,6 +79,8 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
         self.buttonIncreaseSpeed.setDisabled(False)
+
+        self.buttonDisconnect.setDisabled(False)
 
     def _timer_timeout(self):
         if self._approximate_current_packettime >= self.play_back_loggerfile.playback_manager._maximum_time - 0.5:
@@ -93,6 +100,9 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
         self.buttonIncreaseSpeed.clicked.connect(self._increase_speed)
         self.buttonDecreaseSpeed.clicked.connect(self._decrease_speed)
+
+        self.buttonConnect.clicked.connect(self._playback_connect)
+        self.buttonDisconnect.clicked.connect(self._playback_disconnect)
 
     def _setup_shortcuts(self):
         self.shortcut_open = QShortcut(QKeySequence("Ctrl+O"), self)
@@ -153,6 +163,27 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.labelPlaybackSpeed.setText(str(self.playback_speed) + ".0x")
         self.update()
 
+    def _playback_disconnect(self):
+        if self.buttonStop.isEnabled():
+            self._stop()
+        self.buttonPlay.setDisabled(True)
+        self.buttonStop.setDisabled(True)
+        self.buttonPause.setDisabled(True)
+
+        self.buttonDisconnect.setDisabled(True)
+        self.spinBoxExerciseId.setDisabled(False)
+        self.buttonConnect.setDisabled(False)
+
+    def _playback_connect(self):
+        self.exercise_id = int(self.spinBoxExerciseId.text())
+        self.play_back_loggerfile.set_exercise_id(self.exercise_id)
+
+        self.buttonConnect.setDisabled(True)
+        self.buttonDisconnect.setDisabled(False)
+        self.spinBoxExerciseId.setDisabled(True)
+
+        self.buttonPlay.setDisabled(False)
+
     def _set_timeline_position(self, stopped_playback_time: float):
         while stopped_playback_time > self.play_back_loggerfile.playback_manager.stop_time:
             time.sleep(0.1)
@@ -184,7 +215,7 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
             self.logger_file_name = filenames[0]
             self.preciseTime.setText(f"Loading: {filenames[0]}")
 
-            self.loader = FileLoader(self.logger_file_name, self._data_channel)
+            self.loader = FileLoader(self.logger_file_name, self.exercise_id, self._data_channel)
             self.loader.finished.connect(self._loading_finished)
             self.loader.start()
 
@@ -226,7 +257,7 @@ class DataExporterTester(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    form = DataExporterTester()
+    form = DataExporter()
     form.show()
     app.exec_()
 

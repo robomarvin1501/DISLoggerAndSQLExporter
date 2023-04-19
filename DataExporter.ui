@@ -71,6 +71,41 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="Line" name="line">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_connection">
+          <item>
+           <widget class="QPushButton" name="buttonDisconnect">
+            <property name="text">
+             <string>&amp;Disconnect</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="spinBoxExerciseId">
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="value">
+             <number>21</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="buttonConnect">
+            <property name="text">
+             <string>&amp;Connect</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
        </layout>
       </item>
      </layout>
@@ -105,6 +140,11 @@
   <action name="actionOpenFile">
    <property name="text">
     <string>&amp;Open</string>
+   </property>
+  </action>
+  <action name="actionAlter_connection">
+   <property name="text">
+    <string>Alter connection</string>
    </property>
   </action>
  </widget>

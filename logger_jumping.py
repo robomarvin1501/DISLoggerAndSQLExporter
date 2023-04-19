@@ -337,7 +337,7 @@ class PlaybackLoggerFile:
                                                           self.returning_information_queue, exercise_id)
 
         self.sender_process = threading.Thread(target=sender, args=(
-            self.pdu_receiver, self.message_receiver, self.returning_information_queue, 97), daemon=True)
+            self.pdu_receiver, self.message_receiver, self.returning_information_queue, exercise_id), daemon=True)
         self.sender_process.start()
 
     def move(self, requested_time: float):
@@ -360,6 +360,14 @@ class PlaybackLoggerFile:
 
     def set_playback_speed(self, playback_speed: float):
         self.playback_manager.set_playback_speed(playback_speed)
+
+    def set_exercise_id(self, exercise_id: int):
+        self.playback_manager.message_queue.send(("exit",))
+        while self.sender_process.is_alive():
+            time.sleep(0.05)
+        self.sender_process = threading.Thread(target=sender, args=(
+            self.pdu_receiver, self.message_receiver, self.returning_information_queue, exercise_id), daemon=True)
+        self.sender_process.start()
 
 
 if __name__ == "__main__":
