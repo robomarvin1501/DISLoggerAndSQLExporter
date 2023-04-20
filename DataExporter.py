@@ -34,6 +34,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
         self.logger_file_name = ""
         self.actionOpenFile.triggered.connect(self._choose_file)
+        self._base_window_title = self.windowTitle()
 
         self.length_logger_file = 0
         # maps the timeline position to the time in the logger file
@@ -72,6 +73,8 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.make_timeline()
         self.length_logger_file = self.play_back_loggerfile.playback_manager.logger_pdus[-1][1]
         self._display_time(0)
+
+        self.setWindowTitle(self._base_window_title + " - " + self.play_back_loggerfile.logger_path.split("/")[-1])
 
         self._connect_ui()
 
@@ -205,6 +208,19 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         dlg = QFileDialog()
         dlg.setFileMode(QFileDialog.AnyFile)
 
+        self._delete_timeline()
+
+        self.buttonPlay.setDisabled(True)
+        self.buttonStop.setDisabled(True)
+        self.buttonPause.setDisabled(True)
+
+        self.buttonIncreaseSpeed.setDisabled(True)
+        self.buttonDecreaseSpeed.setDisabled(True)
+
+        self.buttonDisconnect.setDisabled(True)
+        self.spinBoxExerciseId.setDisabled(True)
+        self.buttonConnect.setDisabled(True)
+
         if dlg.exec_():
             filenames = dlg.selectedFiles()
             if len(filenames) < 1:
@@ -218,6 +234,12 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
             self.loader = FileLoader(self.logger_file_name, self.exercise_id, self._data_channel)
             self.loader.finished.connect(self._loading_finished)
             self.loader.start()
+
+    def _delete_timeline(self):
+        self.verticalLayout.removeWidget(self.TimeLine)
+        if self.play_back_loggerfile is not None:
+            self.play_back_loggerfile.playback_manager.message_queue.send(("exit",))
+        del self.play_back_loggerfile, self.TimeLine
 
     def _display_time(self, position: float):
         self.preciseTime.setText(f"Current: {position:.2f}s | Length: {self.length_logger_file:.2f}s")
