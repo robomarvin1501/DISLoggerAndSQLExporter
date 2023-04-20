@@ -8,3 +8,6 @@ __pycache__/
 /DataExporterConfig.json
 /dist/
 /build/
+
+*.log
+*.exe
