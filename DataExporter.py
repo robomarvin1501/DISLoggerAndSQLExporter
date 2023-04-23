@@ -117,8 +117,10 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         This method also stops playback upon reaching the end of the loggerfile
         :return: None
         """
-        # This is the time -0.5s in order to catch it BEFORE the end, since reaching the end is undefined behaviour
-        if self._approximate_current_packettime >= self.play_back_loggerfile.playback_manager._maximum_time - 0.5:
+        # This is the time -0.5s * playback speed in order to catch it BEFORE the end, since reaching the end is
+        # undefined behaviour
+        if self._approximate_current_packettime >= self.play_back_loggerfile.playback_manager._maximum_time - (
+                0.5 * self.playback_speed):
             self._stop()
         self._approximate_current_packettime += self._change_playback_position_timer.interval() * self.playback_speed / 1000
 
