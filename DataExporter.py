@@ -74,6 +74,8 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.playback_speed = 1
         self.exercise_id = int(self.spinBoxExerciseId.text())
 
+        self._ui_connected = False
+
         self.buttonPlay.setDisabled(True)
         self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
@@ -100,6 +102,9 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.setWindowTitle(self._base_window_title + " - " + self.play_back_loggerfile.logger_path.split("/")[-1])
 
         self._connect_ui()
+
+        self._set_playback_speed(1)
+        self.play_back_loggerfile.set_exercise_id(self.exercise_id)
 
         # Enable GUI buttons
         self.buttonPlay.setDisabled(False)
@@ -135,6 +140,8 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         This method is called by the __init__(), and connects the buttons to the relevant methods
         :return: None
         """
+        if self._ui_connected:
+            return
         self.buttonPlay.clicked.connect(self._play)
         self.buttonStop.clicked.connect(self._stop)
         self.buttonPause.clicked.connect(self._pause)
@@ -144,6 +151,8 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
         self.buttonConnect.clicked.connect(self._playback_connect)
         self.buttonDisconnect.clicked.connect(self._playback_disconnect)
+
+        self._ui_connected = True
 
     def _setup_shortcuts(self) -> None:
         """
@@ -198,6 +207,17 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
         self._change_playback_position_timer.stop()
 
+    def _set_playback_speed(self, desired_speed: float) -> None:
+        """
+        Sets the playback speed to a specific float which is the speed in question
+        :param desired_speed: float
+        :return: None
+        """
+        self.playback_speed = desired_speed
+        self.play_back_loggerfile.set_playback_speed(self.playback_speed)
+        self.labelPlaybackSpeed.setText(str(self.playback_speed) + ".0x")
+        self.update()
+
     def _increase_speed(self) -> None:
         """
         Increases the playback speed, within acceptable limits (as hardcoded and chosen by ***REMOVED***)
@@ -210,10 +230,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         elif self.playback_speed == 4:
             self.buttonIncreaseSpeed.setDisabled(True)
         self.buttonDecreaseSpeed.setDisabled(False)
-        self.playback_speed += 1
-        self.play_back_loggerfile.set_playback_speed(self.playback_speed)
-        self.labelPlaybackSpeed.setText(str(self.playback_speed) + ".0x")
-        self.update()
+        self._set_playback_speed(self.playback_speed + 1)
 
     def _decrease_speed(self) -> None:
         """
@@ -226,10 +243,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         elif self.playback_speed == 2:
             self.buttonDecreaseSpeed.setDisabled(True)
         self.buttonIncreaseSpeed.setDisabled(False)
-        self.playback_speed -= 1
-        self.play_back_loggerfile.set_playback_speed(self.playback_speed)
-        self.labelPlaybackSpeed.setText(str(self.playback_speed) + ".0x")
-        self.update()
+        self._set_playback_speed(self.playback_speed - 1)
 
     def _playback_disconnect(self) -> None:
         """
