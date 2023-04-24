@@ -348,7 +348,7 @@ class LoggerSQLExporter:
         """
         # Set ExporterMarkingText
         marking_text = "".join(map(chr, logger_pdu.pdu.marking.characters))
-        self.exporter_marking_text[logger_pdu.pdu.entityID.__str__()] = marking_text
+        self.exporter_marking_text[logger_pdu.pdu.entityID.__str__()] = marking_text.strip("\x00")
 
         base_data = {
             "SenderIdSite": logger_pdu.pdu.entityID.siteID,
