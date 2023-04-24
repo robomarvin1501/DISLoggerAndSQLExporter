@@ -1,7 +1,9 @@
 import datetime
+import json
 import queue
 import sys
 import time
+import os
 
 from logger_jumping import PlaybackLoggerFile
 import DataExporterUi
@@ -73,6 +75,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
         self.playback_speed = 1
         self.exercise_id = int(self.spinBoxExerciseId.text())
+        self._load_history()
 
         self._ui_connected = False
 
@@ -85,6 +88,44 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonConnect.setDisabled(True)
         self.buttonDisconnect.setDisabled(True)
         self.spinBoxExerciseId.setDisabled(True)
+
+    def _load_history(self) -> None:
+        """
+        Checks if the session file, and folder exist. If they do not exist, then it creates them.
+        Then reads the session file, and loads the data into relevant places.
+        :return: None
+        """
+        if "DataPlayer" not in os.listdir("C:/"):
+            os.mkdir("C:/DataPlayer")
+            with open("C:/DataPlayer/session.json", 'w') as f:
+                json.dump({"exercise_id": 21}, f)
+
+        with open("C:/DataPlayer/session.json", 'r') as f:
+            last_session = json.load(f)
+            self.exercise_id = last_session["exercise_id"]
+
+        self.spinBoxExerciseId.setValue(self.exercise_id)
+
+    def _write_session_history(self) -> None:
+        """
+        Writes the session data to the session file when closed.
+        :return: None
+        """
+        session_data = {
+            "exercise_id": self.exercise_id
+        }
+
+        with open("C:/DataPlayer/session.json", 'w') as f:
+            json.dump(session_data, f)
+
+    def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
+        """
+        Called automatically when the DataPlayer is closed, writes the session history, and finishes closing the wiundow
+        :param a0: QtGui.QCloseEvent
+        :return: None
+        """
+        self._write_session_history()
+        a0.accept()
 
     def _loading_finished(self) -> None:
         """
