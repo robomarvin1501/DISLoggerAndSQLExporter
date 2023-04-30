@@ -25,7 +25,7 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
     :return: None
     """
     UDP_PORT = 3000
-    DESTINATION_ADDRESS = "192.133.255.255"
+    DESTINATION_ADDRESS = "255.255.255.255"
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)

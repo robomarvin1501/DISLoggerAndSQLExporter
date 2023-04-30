@@ -12,7 +12,7 @@ EXERCISE_ID = 99
 UDP_PORT = 3000
 FILENAME = "test.lzma"
 
-DESTINATION_ADDRESS = "192.133.255.255"
+DESTINATION_ADDRESS = "255.255.255.255"
 entityids = set()
 
 print("Created UDP socket {}".format(UDP_PORT))
