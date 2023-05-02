@@ -274,9 +274,11 @@ class PlaybackLoggerFileManager:
             need_to_unpause = True
         if requested_time > self._maximum_time:
             self.position_pointer = len(self.logger_pdus) - 1
-            return None
-        wanted_index = self._binary_search_for_time(requested_time, len(self.logger_pdus), 0)
-        self.position_pointer = wanted_index
+        elif requested_time <= 0:
+            self.position_pointer = 0
+        else:
+            wanted_index = self._binary_search_for_time(requested_time, len(self.logger_pdus), 0)
+            self.position_pointer = wanted_index
         if need_to_unpause:
             self.unpause_playback()
 
