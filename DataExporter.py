@@ -246,6 +246,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonPlay.setDisabled(False)
         self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
+        self.buttonJumpStart.setDisabled(True)
 
         self.play_back_loggerfile.pause()
         self._set_timeline_position(stopped_playback)
@@ -254,9 +255,10 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
     def _jump(self) -> None:
         """
-        jumps to the start of the timeline
+        jumps to the start of the timeline and stops it from playing
         :return: None
         """
+        self._stop()
         self._approximate_current_packettime = 0
         self._display_time(self._approximate_current_packettime)
         self.play_back_loggerfile.move(0)
