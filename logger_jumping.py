@@ -7,10 +7,13 @@ import socket
 import threading
 import struct
 import time
+import os
 
 import logging
 
-logging.basicConfig(filename="jumping.log", encoding="utf8", filemode="w", level=logging.DEBUG)
+if "DataPlayer" not in os.listdir("C:/"):
+    os.mkdir("C:/DataPlayer")
+logging.basicConfig(filename="C:/DataPlayer/jumping.log", encoding="utf8", filemode="w", level=logging.DEBUG)
 
 
 def sender(pdu_queue: multiprocessing.connection.PipeConnection,
@@ -63,7 +66,8 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
                 logging.debug(f"{messages_not_slept} messages not slept")
                 messages_not_slept = 0
                 returning_information_queue.put(last_executed_time)
-                last_executed_time = 0
+                if not message[1]:
+                    last_executed_time = 0
             elif message[0] == "starting_timestamp":
                 # Get the PacketTime of the first message to be sent, and modify according to the playback speed
                 starting_timestamp = message[1]
@@ -274,11 +278,9 @@ class PlaybackLoggerFileManager:
             need_to_unpause = True
         if requested_time > self._maximum_time:
             self.position_pointer = len(self.logger_pdus) - 1
-        elif requested_time <= 0:
-            self.position_pointer = 0
-        else:
-            wanted_index = self._binary_search_for_time(requested_time, len(self.logger_pdus), 0)
-            self.position_pointer = wanted_index
+            return None
+        wanted_index = self._binary_search_for_time(requested_time, len(self.logger_pdus), 0)
+        self.position_pointer = wanted_index
         if need_to_unpause:
             self.unpause_playback()
 
@@ -363,7 +365,7 @@ class PlaybackLoggerFileManager:
         if not pause:
             self.remove_all_entities()
         if self.playback_thread.is_alive():
-            self.message_queue.send(("stop",))
+            self.message_queue.send(("stop", pause))
 
     def remove_all_entities(self) -> None:
         """
@@ -419,7 +421,7 @@ class PlaybackLoggerFileManager:
         Kinda deprecated since play() can also handle this
         :return: None
         """
-        self.stop_playback()
+        self.stop_playback(pause=True)
         self.paused = False
         while self.playback_thread.is_alive():
             time.sleep(0.1)
@@ -544,7 +546,7 @@ if __name__ == "__main__":
     returning_information_queue = multiprocessing.SimpleQueue()
     playback = 1
 
-    plg = PlaybackLoggerFileManager("logs/check_DamageResult_3.lzma", pdu_sender, message_sender, returning_information_queue,
+    plg = PlaybackLoggerFileManager("logs/check_wildgoose_0305_1.lzma", pdu_sender, message_sender, returning_information_queue,
                                     99)
     command = ""
     running_time = 0
