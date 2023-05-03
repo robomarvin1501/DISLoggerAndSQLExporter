@@ -544,12 +544,12 @@ if __name__ == "__main__":
     returning_information_queue = multiprocessing.SimpleQueue()
     playback = 1
 
-    plg = PlaybackLoggerFileManager("logs/exp_1_2102_2.lzma", pdu_sender, message_sender, returning_information_queue,
-                                    97)
+    plg = PlaybackLoggerFileManager("logs/check_DamageResult_3.lzma", pdu_sender, message_sender, returning_information_queue,
+                                    99)
     command = ""
     running_time = 0
     sender_process = multiprocessing.Process(target=sender,
-                                             args=(pdu_receiver, message_receiver, returning_information_queue, 97),
+                                             args=(pdu_receiver, message_receiver, returning_information_queue, 99),
                                              daemon=True, name="ByteSender")
     sender_process.start()
     while command != "q":

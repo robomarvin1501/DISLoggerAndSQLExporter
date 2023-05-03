@@ -258,7 +258,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         :return: None
         """
         self._approximate_current_packettime = 0
-        self._display_time(0)
+        self._display_time(self._approximate_current_packettime)
         self.play_back_loggerfile.move(0)
         self.change_position_by_time(0)
 
