@@ -100,4 +100,4 @@ udpSocket.bind(("", udp_port))
 udpSocket.settimeout(3)  # exit if we get nothing in this many seconds
 
 while True:
-    receive_pdu(udpSocket, 99)
+    receive_pdu(udpSocket, EXERCISE_ID)

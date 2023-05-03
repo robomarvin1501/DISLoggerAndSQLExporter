@@ -7,10 +7,13 @@ import socket
 import threading
 import struct
 import time
+import os
 
 import logging
 
-logging.basicConfig(filename="jumping.log", encoding="utf8", filemode="w", level=logging.DEBUG)
+if "DataPlayer" not in os.listdir("C:/"):
+    os.mkdir("C:/DataPlayer")
+logging.basicConfig(filename="C:/DataPlayer/jumping.log", encoding="utf8", filemode="w", level=logging.DEBUG)
 
 
 def sender(pdu_queue: multiprocessing.connection.PipeConnection,
