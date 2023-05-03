@@ -63,7 +63,8 @@ def sender(pdu_queue: multiprocessing.connection.PipeConnection,
                 logging.debug(f"{messages_not_slept} messages not slept")
                 messages_not_slept = 0
                 returning_information_queue.put(last_executed_time)
-                last_executed_time = 0
+                if not message[1]:
+                    last_executed_time = 0
             elif message[0] == "starting_timestamp":
                 # Get the PacketTime of the first message to be sent, and modify according to the playback speed
                 starting_timestamp = message[1]
@@ -361,7 +362,7 @@ class PlaybackLoggerFileManager:
         if not pause:
             self.remove_all_entities()
         if self.playback_thread.is_alive():
-            self.message_queue.send(("stop",))
+            self.message_queue.send(("stop", pause))
 
     def remove_all_entities(self) -> None:
         """
@@ -417,7 +418,7 @@ class PlaybackLoggerFileManager:
         Kinda deprecated since play() can also handle this
         :return: None
         """
-        self.stop_playback()
+        self.stop_playback(pause=True)
         self.paused = False
         while self.playback_thread.is_alive():
             time.sleep(0.1)
@@ -542,12 +543,12 @@ if __name__ == "__main__":
     returning_information_queue = multiprocessing.SimpleQueue()
     playback = 1
 
-    plg = PlaybackLoggerFileManager("logs/exp_1_2102_2.lzma", pdu_sender, message_sender, returning_information_queue,
-                                    97)
+    plg = PlaybackLoggerFileManager("logs/check_wildgoose_0305_1.lzma", pdu_sender, message_sender, returning_information_queue,
+                                    99)
     command = ""
     running_time = 0
     sender_process = multiprocessing.Process(target=sender,
-                                             args=(pdu_receiver, message_receiver, returning_information_queue, 97),
+                                             args=(pdu_receiver, message_receiver, returning_information_queue, 99),
                                              daemon=True, name="ByteSender")
     sender_process.start()
     while command != "q":
