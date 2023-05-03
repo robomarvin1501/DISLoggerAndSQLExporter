@@ -44,6 +44,13 @@
          </widget>
         </item>
         <item>
+         <widget class="QPushButton" name="buttonJumpStart">
+          <property name="text">
+           <string>Jump to 0:0</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="Line" name="line_2">
           <property name="orientation">
            <enum>Qt::Vertical</enum>

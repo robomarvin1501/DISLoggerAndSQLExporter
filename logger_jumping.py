@@ -366,6 +366,8 @@ class PlaybackLoggerFileManager:
             self.remove_all_entities()
         if self.playback_thread.is_alive():
             self.message_queue.send(("stop", pause))
+        else:
+            self.stop_time = datetime.datetime.now().timestamp()
 
     def remove_all_entities(self) -> None:
         """

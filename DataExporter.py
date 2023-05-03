@@ -82,6 +82,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonPlay.setDisabled(True)
         self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
+        self.buttonJumpStart.setDisabled(True)
         self.buttonIncreaseSpeed.setDisabled(True)
         self.buttonDecreaseSpeed.setDisabled(True)
 
@@ -151,6 +152,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonPlay.setDisabled(False)
         self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
+        self.buttonJumpStart.setDisabled(True)
         self.buttonIncreaseSpeed.setDisabled(False)
 
         self.buttonDisconnect.setDisabled(False)
@@ -186,6 +188,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonPlay.clicked.connect(self._play)
         self.buttonStop.clicked.connect(self._stop)
         self.buttonPause.clicked.connect(self._pause)
+        self.buttonJumpStart.clicked.connect(self._jump)
 
         self.buttonIncreaseSpeed.clicked.connect(self._increase_speed)
         self.buttonDecreaseSpeed.clicked.connect(self._decrease_speed)
@@ -212,6 +215,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonPlay.setDisabled(True)
         self.buttonStop.setDisabled(False)
         self.buttonPause.setDisabled(False)
+        self.buttonJumpStart.setDisabled(False)
 
         self.play_back_loggerfile.play()
         self._change_playback_position_timer.start(10)
@@ -242,11 +246,23 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonPlay.setDisabled(False)
         self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
+        self.buttonJumpStart.setDisabled(True)
 
         self.play_back_loggerfile.pause()
         self._set_timeline_position(stopped_playback)
 
         self._change_playback_position_timer.stop()
+
+    def _jump(self) -> None:
+        """
+        jumps to the start of the timeline and stops it from playing
+        :return: None
+        """
+        self._stop()
+        self._approximate_current_packettime = 0
+        self._display_time(self._approximate_current_packettime)
+        self.play_back_loggerfile.move(0)
+        self.change_position_by_time(0)
 
     def _set_playback_speed(self, desired_speed: float) -> None:
         """
@@ -332,7 +348,6 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
             self.play_back_loggerfile.playback_manager.position_pointer][1]
         print(current_time)
         self.change_position_by_time(current_time)
-        self.TimeLine._trigger_refresh()
 
     def make_timeline(self) -> None:
         """
@@ -360,6 +375,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         self.buttonPlay.setDisabled(True)
         self.buttonStop.setDisabled(True)
         self.buttonPause.setDisabled(True)
+        self.buttonJumpStart.setDisabled(True)
 
         self.buttonIncreaseSpeed.setDisabled(True)
         self.buttonDecreaseSpeed.setDisabled(True)
@@ -412,8 +428,9 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         timeline_position = self.time_mapper(time)
         self.TimeLine._calculate_mouse(timeline_position)
         # Not using updated position because this also moves the play_back_loggerfile
-        # TODO combine updated_position and moved_mouse into one function with a boolean flag for movng the logger
+        # TODO combine updated_position and moved_mouse into one function with a boolean flag for moving the logger
         self._moved_mouse(timeline_position)
+        self.TimeLine._trigger_refresh()
 
     def _updated_position(self, x_pos: int) -> None:
         """
