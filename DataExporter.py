@@ -258,9 +258,10 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         :return: None
         """
         self.buttonJumpStart.setDisabled(True)
+        self.change_position_by_time(0)
         self.play_back_loggerfile.move(0)
         self._approximate_current_packettime = 0
-        self._stop()
+        self._display_time(self._approximate_current_packettime)
 
     def _set_playback_speed(self, desired_speed: float) -> None:
         """
