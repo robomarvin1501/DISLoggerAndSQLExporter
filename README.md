@@ -1,7 +1,7 @@
-DataExporter
+DISLoggerAndSQLExporter
 =============
 
-Welcome to the DataExporter, and Logger.
+Welcome to the DISLoggerAndSQLExporter
 
 Version 1.0 was released on 2022.08.23.  
 The purpose is to provide logging of a simulation, following the DIS standard, and to replace the logger from MAK with a
