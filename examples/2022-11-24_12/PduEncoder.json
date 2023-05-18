@@ -1,0 +1,26 @@
+{
+    "420": {
+        "event_name": "ExampleEventReport0",
+        "event_num": 420,
+        "FixedData": {
+            "state": "Int32",
+            "mode": "Int32"
+        },
+        "VariableData": {}
+    },
+    "1337": {
+        "event_name": "ExampleEventReport1",
+        "event_num": 1337,
+        "FixedData": {
+            "LocationX": "Float64",
+            "LocationY": "Float64",
+            "LocationZ": "Float64",
+            "EntityIDSite": "Int32",
+            "EntityIDHost": "Int32",
+            "EntityIDNum": "Int32"
+        },
+        "VariableData": {
+            "RoleID": "ArrayByte"
+        }
+    }
+}

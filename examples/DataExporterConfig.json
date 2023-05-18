@@ -1,0 +1,10 @@
+{
+  "exercise_id": 20,
+  "logger_file": "name_of_exercise.lzma",
+
+  "export_to_sql": false,
+  "database_name": "TargetSQLDatabase",
+  "new_database": false,
+
+  "message_length": 32768
+}
