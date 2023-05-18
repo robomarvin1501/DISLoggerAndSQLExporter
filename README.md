@@ -12,7 +12,7 @@ Free Software alternative.
 
 I shall take you through this procedure, to grant you the knowledge of with what you are dealing, and how to do so.
 
-1. One must create a DataExporterConfig.json file, in accordance with the one found in the examples folder.
+1. One must create a configuration.json file, in accordance with the one found in the examples folder.
     - The message length field can usually be ignored.
 2. Create the PduEncoder.json detailing the event reports you will be using. It should be put inside a folder which is a
    parsable datetime. An example of this is the date and time the file was created. See examples for an example.
@@ -32,7 +32,7 @@ I shall take you through this procedure, to grant you the knowledge of with what
         - ExerciseID
         - PlayStop
         - ExporterMarkingText
-4. You may now run logger.exe or the DataExporter
+4. You may now run logger.exe or the DataPlayer
 
 ----------------------------
 

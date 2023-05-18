@@ -6,7 +6,7 @@ import time
 import os
 
 from logger_jumping import PlaybackLoggerFile
-import DataExporterUi
+import DataPlayerUi
 from timeline import _Timeline
 from utils.base_directory import get_base_directory
 
@@ -40,15 +40,15 @@ class FileLoader(QThread):
         self._data_pipe.put(plg)
 
 
-class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
+class DataPlayer(QtWidgets.QMainWindow, DataPlayerUi.Ui_MainWindow):
     """
-    The class derived from PyQT which is the main window for the DataExporter - Player
+    The class derived from PyQT which is the main window for the DataPlayer
     Through this window all playback options are managed by the user. They control speed, exercise id, and which parts
     of the logger are played to the network.
     """
 
     def __init__(self, parent=None):
-        super(DataExporter, self).__init__(parent)
+        super(DataPlayer, self).__init__(parent)
         self.setupUi(self)
         self.base_path = get_base_directory()
 
@@ -481,7 +481,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    form = DataExporter()
+    form = DataPlayer()
     form.show()
     app.exec_()
 

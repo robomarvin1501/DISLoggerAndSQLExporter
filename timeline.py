@@ -25,8 +25,8 @@ class _Timeline(QtWidgets.QWidget):
 
     def __init__(self, *args, **kwargs):
         """
-        :param args:   : Left empty in the instantiation in DataExporter.py, for I have nothing to add
-        :param kwargs: : Left empty in the instantiation in DataExporter.py, for I have nothing to add
+        :param args:   : Left empty in the instantiation in DataPlayer.py, for I have nothing to add
+        :param kwargs: : Left empty in the instantiation in DataPlayer.py, for I have nothing to add
         """
         super(_Timeline, self).__init__(*args, **kwargs)
 
