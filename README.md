@@ -1,10 +1,10 @@
 DataExporter
 =============
 
-Welcome to the DataExporter, and Logger of the ***REMOVED***.  
+Welcome to the DataExporter, and Logger.  
 
-This code was created by ***REMOVED***, with version 1.0 being released on 2022.08.23.  
-The purpose is to provide logging of a simulation, following the DIS standard, and to replace the logger from MAK, and the LoggerSQLExporter created to export said files.  
+Version 1.0 was released on 2022.08.23.  
+The purpose is to provide logging of a simulation, following the DIS standard, and to replace the logger from MAK with a Free Software alternative.
 ----------------------------
 
 ## Starting a new experiment
@@ -12,10 +12,7 @@ I shall take you through this procedure, to grant you the knowledge of with what
 
 1. DataExporterConfig.json
    - One must set all the fields within this file. The message length field can usually be ignored.
-2. Run update_pduencoder.py on a machine that has ***REMOVED***. This:
-   1. Creates the PduEncoder.json file
-   2. Creates the SQL code to make the SQL tables
-   3. Makes the SQL tables
+2. Create the encoders, and the SQL database target.
 3. Put the generated sub-directory of `encoders` into the `encoders` directory on the target machine
 4. You may now run logger.exe or the DataExporter
 
@@ -54,5 +51,3 @@ This file is home to 4 classes: `Exporter`, `LoggerPDU`, `EventReportInterpreter
 `encoders` houses the encoders that have been generated.  
 `logs` These are the generated logs by the logger.
 
-These are all necessary for running the code, even if the code is a standalone exe. `***REMOVED***` however, does not need all the code, just the `GeneralStructs.csv` file.  
-This is because the target computer does not have ***REMOVED*** installed, and should *_NOT_* be trying to generate the PDUEncoder, or the SQL database 

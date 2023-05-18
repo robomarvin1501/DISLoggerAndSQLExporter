@@ -277,7 +277,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
 
     def _increase_speed(self) -> None:
         """
-        Increases the playback speed, within acceptable limits (as hardcoded and chosen by ***REMOVED***)
+        Increases the playback speed, within acceptable limits (as hardcoded and chosen by Gidon Rosalki)
         From experience the maximum feasible speed is 10x, but I've never seen anyone use more than 5.
         :return: None
         """
