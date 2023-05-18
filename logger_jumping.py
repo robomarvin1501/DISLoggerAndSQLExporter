@@ -8,12 +8,14 @@ import threading
 import struct
 import time
 import os
-
 import logging
 
-if "DataPlayer" not in os.listdir("C:/"):
-    os.mkdir("C:/DataPlayer")
-logging.basicConfig(filename="C:/DataPlayer/jumping.log", encoding="utf8", filemode="w", level=logging.DEBUG)
+from utils.base_directory import get_base_directory
+
+base_path = get_base_directory()
+if "DataPlayer" not in os.listdir(base_path):
+    os.mkdir(f"{base_path}DataPlayer")
+logging.basicConfig(filename=f"{base_path}DataPlayer/jumping.log", encoding="utf8", filemode="w", level=logging.DEBUG)
 
 
 def sender(pdu_queue: multiprocessing.connection.PipeConnection,

@@ -8,6 +8,7 @@ import os
 from logger_jumping import PlaybackLoggerFile
 import DataExporterUi
 from timeline import _Timeline
+from utils.base_directory import get_base_directory
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QKeySequence
@@ -49,6 +50,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
     def __init__(self, parent=None):
         super(DataExporter, self).__init__(parent)
         self.setupUi(self)
+        self.base_path = get_base_directory()
 
         self.logger_file_name = ""
         self.actionOpenFile.triggered.connect(self._choose_file)
@@ -96,12 +98,12 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
         Then reads the session file, and loads the data into relevant places.
         :return: None
         """
-        if "DataPlayer" not in os.listdir("C:/"):
-            os.mkdir("C:/DataPlayer")
-            with open("C:/DataPlayer/session.json", 'w') as f:
+        if "DataPlayer" not in os.listdir(self.base_path):
+            os.mkdir(f"{self.base_path}DataPlayer")
+            with open(f"{self.base_path}DataPlayer/session.json", 'w') as f:
                 json.dump({"exercise_id": 21}, f)
 
-        with open("C:/DataPlayer/session.json", 'r') as f:
+        with open(f"{self.base_path}DataPlayer/session.json", 'r') as f:
             last_session = json.load(f)
             self.exercise_id = last_session["exercise_id"]
 
@@ -116,7 +118,7 @@ class DataExporter(QtWidgets.QMainWindow, DataExporterUi.Ui_MainWindow):
             "exercise_id": self.exercise_id
         }
 
-        with open("C:/DataPlayer/session.json", 'w') as f:
+        with open(f"{self.base_path}DataPlayer/session.json", 'w') as f:
             json.dump(session_data, f)
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
