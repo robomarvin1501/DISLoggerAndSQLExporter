@@ -4,10 +4,10 @@ __pycache__/
 /logs/
 /mak_logs/
 /encoders/
-/***REMOVED***/config.py
 /DataExporterConfig.json
 /dist/
 /build/
+/venv
 
 *.log
 *.exe

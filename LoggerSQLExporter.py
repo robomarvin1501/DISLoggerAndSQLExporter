@@ -8,31 +8,12 @@ import struct
 import logging
 import threading
 import time
-import urllib.parse
 
 import sqlalchemy
 
 import opendis
 
 from opendis.PduFactory import createPdu
-***REMOVED***
-***REMOVED***
-
-
-def sql_engine(db: str):
-    """
-    A variation of the ***REMOVED***.Tools sqlConn function, since I needed an engine, rather than a connection
-    Little reason to change what mostly works
-    Additionally, features pool_size, for using multiple threads.
-    :param db: str
-    :return: sqlalchemy.engine
-    """
-    ***REMOVED***
-    params = urllib.parse.quote_plus(conn_str)
-    engine = sqlalchemy.create_engine("mssql+pyodbc:///?odbc_connect=%s" % params, pool_size=5_000, max_overflow=0)
-
-    return engine
-
 
 logging.basicConfig(filename="logger_exporter.log", encoding="utf-8", level=logging.DEBUG)
 
@@ -224,21 +205,17 @@ class LoggerSQLExporter:
     the EntityID (or whatever is most amenable)
     """
 
-    def __init__(self, logger_file: str, export_db: str, exercise_id: int, new_db: bool = False):
+    def __init__(self, logger_file: str, conn_str: str, exercise_id: int, new_db: bool = False):
         """
         :param logger_file: str
-        :param export_db: str
+        :param conn_str: str
         :param exercise_id: int
         :param new_db: bool
         """
-        if new_db:
-            # Creates the Event Report tables when it's a new db. Can be run every time, but unnecessary
-            ***REMOVED***()
-            ***REMOVED***(export_db)
 
         self.pdu_encoder = None
 
-        self.sql_engine = sql_engine(export_db)
+        self.sql_engine = sqlalchemy.create_engine(conn_str, pool_size=5_000, max_overflow=0)
         self.sql_meta = sqlalchemy.MetaData(schema="dis")
 
         self.logger_file = logger_file

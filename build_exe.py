@@ -5,6 +5,5 @@ PyInstaller.__main__.run([
     "--hidden-import=pyodbc",
     "--exclude-module=gevent",
     "--exclude-module=tkinter",
-    # "--add-data=***REMOVED***/GeneralStructs.csv;csv",
     "--onefile"
 ])

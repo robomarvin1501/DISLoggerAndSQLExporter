@@ -51,7 +51,6 @@ This file is home to 4 classes: `Exporter`, `LoggerPDU`, `EventReportInterpreter
 ----------------------------
 
 ## Necessary directories
-`***REMOVED***` houses the code that creates encoders based off what is found in ***REMOVED***. It also houses the `GeneralStructs.csv` file, for building such things.     
 `encoders` houses the encoders that have been generated.  
 `logs` These are the generated logs by the logger.
 
